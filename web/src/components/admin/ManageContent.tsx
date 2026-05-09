@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Trash2, Edit, RotateCcw, AlertOctagon, ChevronDown, Filter } from 'lucide-react';
+import { Loader2, Trash2, Edit, RotateCcw, AlertOctagon, ChevronDown, Filter, Search, X } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -38,6 +38,7 @@ export default function ManageContent({
     const [sortMode, setSortMode] = useState<'posted_desc' | 'posted_asc' | 'edited_desc' | 'edited_asc'>('edited_desc');
     const [imageFilter, setImageFilter] = useState<'all' | 'no_image' | 'has_image'>('all');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const { showToast } = useToast();
