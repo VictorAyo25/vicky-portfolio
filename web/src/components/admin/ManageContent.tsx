@@ -38,7 +38,7 @@ export default function ManageContent({
     const [sortMode, setSortMode] = useState<'posted_desc' | 'posted_asc' | 'edited_desc' | 'edited_asc'>('edited_desc');
     const [imageFilter, setImageFilter] = useState<'all' | 'no_image' | 'has_image'>('all');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const { showToast } = useToast();
@@ -122,6 +122,17 @@ export default function ManageContent({
 
         return [...filteredPosts]
             .filter((post) => {
+                if (searchQuery.trim()) {
+                    const q = searchQuery.toLowerCase();
+                    return (
+                        post.title?.toLowerCase().includes(q) ||
+                        post.category?.toLowerCase().includes(q) ||
+                        post.subCategory?.toLowerCase().includes(q)
+                    );
+                }
+                return true;
+            })
+            .filter((post) => {
                 if (imageFilter === 'has_image') return !!post.coverImage;
                 if (imageFilter === 'no_image') return !post.coverImage;
                 return true;
@@ -132,7 +143,7 @@ export default function ManageContent({
                 if (sortMode === 'edited_asc') return getEditedMs(a) - getEditedMs(b);
                 return getEditedMs(b) - getEditedMs(a);
             });
-    }, [filteredPosts, sortMode, imageFilter]);
+    }, [filteredPosts, sortMode, imageFilter, searchQuery]);
 
     useEffect(() => {
         try {
@@ -331,6 +342,22 @@ export default function ManageContent({
                                 ))}
                             </select>
                         )}
+                        {/* Search */}
+                        <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search posts..."
+                                className="bg-[#0F0E0D] border border-[#2F2A26] rounded-lg pl-9 pr-8 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-[#C5A059] w-48"
+                            />
+                            {searchQuery && (
+                                <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
                         <select
                             value={imageFilter}
                             onChange={(e) => setImageFilter(e.target.value as 'all' | 'no_image' | 'has_image')}
