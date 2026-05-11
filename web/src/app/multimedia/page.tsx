@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Play, Loader2 } from 'lucide-react';
+import { Play, Loader2, Eye } from 'lucide-react';
 
 interface Post {
   id: string;
@@ -17,10 +17,16 @@ interface Post {
   deleted?: boolean;
 }
 
+const AUTO_DISMISS_MS = 4000;
+const LONG_PRESS_MS = 500;
+
 export default function MultimediaPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPress = useRef(false);
 
   useEffect(() => {
     async function fetchPosts() {
@@ -38,10 +44,61 @@ export default function MultimediaPage() {
       }
     }
     fetchPosts();
+
+    return () => {
+      timers.current.forEach(t => clearTimeout(t));
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    };
   }, []);
 
-  const handleOutsideTap = useCallback(() => {
+  const dismissActive = useCallback(() => {
     setActiveId(null);
+  }, []);
+
+  const scheduleAutoDismiss = useCallback((postId: string) => {
+    // Clear existing timer for this card
+    const existing = timers.current.get(postId);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      setActiveId(prev => prev === postId ? null : prev);
+      timers.current.delete(postId);
+    }, AUTO_DISMISS_MS);
+
+    timers.current.set(postId, timer);
+  }, []);
+
+  const handleCardClick = useCallback((e: React.MouseEvent | React.TouchEvent, post: Post) => {
+    e.stopPropagation();
+
+    // If this was a long-press, ignore the click
+    if (isLongPress.current) {
+      isLongPress.current = false;
+      return;
+    }
+
+    if (activeId === post.id) {
+      // Second tap/click: navigate
+      window.location.href = `/${post.slug}`;
+    } else {
+      // First tap: reveal
+      setActiveId(post.id);
+      scheduleAutoDismiss(post.id);
+    }
+  }, [activeId, scheduleAutoDismiss]);
+
+  const handleTouchStart = useCallback(() => {
+    isLongPress.current = false;
+    longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true;
+    }, LONG_PRESS_MS);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
   }, []);
 
   if (loading) {
@@ -55,7 +112,7 @@ export default function MultimediaPage() {
   return (
     <main
       className="min-h-screen bg-[#0F0E0D] pt-20 pb-16"
-      onClick={handleOutsideTap}
+      onClick={dismissActive}
     >
       <div className="max-w-7xl mx-auto px-4 md:px-8">
         {/* Header */}
@@ -92,31 +149,27 @@ export default function MultimediaPage() {
                   transition={{ duration: 0.4, delay: i * 0.05 }}
                   className="group relative aspect-[4/3] rounded-xl overflow-hidden cursor-pointer select-none"
                   onContextMenu={e => e.preventDefault()}
-                  onClick={e => {
-                    e.stopPropagation();
-                    if (isActive) {
-                      // Second tap: navigate
-                      window.location.href = `/${post.slug}`;
-                    } else {
-                      // First tap: reveal title
-                      setActiveId(post.id);
-                    }
-                  }}
+                  onClick={e => handleCardClick(e, post)}
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={handleTouchEnd}
                 >
                   {/* Cover Image */}
-                  <div
-                    className="absolute inset-0 bg-cover bg-center transition-transform duration-500 ease-out group-hover:scale-105 pointer-events-none"
+                  <motion.div
+                    className="absolute inset-0 bg-cover bg-center pointer-events-none"
                     style={{ backgroundImage: `url(${post.coverImage})` }}
+                    animate={{ scale: isActive ? 1.05 : 1 }}
+                    transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
                   />
 
-                  {/* Dim overlay — visible on hover (desktop) or when active (tap) */}
-                  <div
-                    className={`absolute inset-0 transition-colors duration-400 ease-out pointer-events-none ${
-                      isActive
-                        ? 'bg-black/60'
-                        : 'bg-black/0 group-hover:bg-black/60'
-                    }`}
+                  {/* Dim overlay */}
+                  <motion.div
+                    className="absolute inset-0 pointer-events-none"
+                    animate={{ opacity: isActive ? 1 : 0 }}
+                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                    style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)' }}
                   />
+                  {/* Desktop hover overlay (CSS-only for instant response) */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300 pointer-events-none hidden md:block" />
 
                   {/* Category pill — always visible */}
                   <div className="absolute top-3 left-3 z-10 pointer-events-none">
@@ -125,28 +178,69 @@ export default function MultimediaPage() {
                     </span>
                   </div>
 
-                  {/* Title — centered, reveals on hover (desktop) or when active (tap) */}
+                  {/* Mobile hint — "tap to view" indicator */}
+                  <AnimatePresence>
+                    {!isActive && (
+                      <motion.div
+                        className="absolute bottom-3 right-3 z-10 md:hidden pointer-events-none"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <div className="bg-white/15 backdrop-blur-md rounded-full p-2 border border-white/10">
+                          <Eye size={14} className="text-white/80" />
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Title + details overlay */}
+                  <AnimatePresence>
+                    {isActive && (
+                      <motion.div
+                        className="absolute inset-0 flex flex-col items-center justify-end p-4 md:p-6 z-10 pointer-events-none"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <motion.h3
+                          className="text-sm md:text-base font-serif text-white text-center leading-tight drop-shadow-lg line-clamp-3 px-2 mb-2"
+                          initial={{ y: 12, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          exit={{ y: 8, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.05 }}
+                        >
+                          {post.title}
+                        </motion.h3>
+                        <motion.p
+                          className="text-[10px] md:text-[11px] text-white/60 font-sans tracking-wide"
+                          initial={{ y: 8, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          exit={{ y: 4, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
+                        >
+                          Tap again to view
+                        </motion.p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Desktop hover title (CSS group-hover for instant response) */}
                   <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6 z-10 pointer-events-none">
-                    <h3
-                      className={`text-sm md:text-base font-serif text-white text-center leading-tight drop-shadow-lg line-clamp-3 px-2 transition-all duration-400 ${
-                        isActive
-                          ? 'opacity-100 translate-y-0'
-                          : 'opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0'
-                      }`}
-                    >
+                    <h3 className="text-sm md:text-base font-serif text-white text-center leading-tight drop-shadow-lg line-clamp-3 px-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 ease-out">
                       {post.title}
                     </h3>
                   </div>
 
-                  {/* Invisible link overlay for SEO/accessibility — only when not active (prevents context menu on first tap) */}
-                  {!isActive && (
-                    <Link
-                      href={`/${post.slug}`}
-                      className="absolute inset-0 z-20"
-                      aria-label={post.title}
-                      tabIndex={-1}
-                    />
-                  )}
+                  {/* Link overlay — only on desktop via CSS, or when active on second tap the click handler navigates */}
+                  <Link
+                    href={`/${post.slug}`}
+                    className="absolute inset-0 z-20 hidden md:block"
+                    aria-label={post.title}
+                    tabIndex={-1}
+                  />
                 </motion.article>
               );
             })}
