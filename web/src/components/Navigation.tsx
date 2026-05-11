@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { Menu, X, ChevronDown, ArrowRight } from 'lucide-react';
-import { INITIAL_TAXONOMY, Taxonomy } from '@/lib/taxonomy';
+import { usePathname } from 'next/navigation';
+import { Menu, X, ChevronDown, ArrowRight, Play } from 'lucide-react';
+import { INITIAL_TAXONOMY } from '@/lib/taxonomy';
 
 export default function Navigation() {
   const [scrolled, setScrolled] = useState(false);
@@ -13,7 +13,6 @@ export default function Navigation() {
   const [expandedMobileCategory, setExpandedMobileCategory] = useState<string | null>(null);
   const pathname = usePathname();
 
-  // Static taxonomy — no Firebase call needed
   const navLinks = Object.keys(INITIAL_TAXONOMY);
 
   useEffect(() => {
@@ -67,6 +66,16 @@ export default function Navigation() {
               }`}
             >
               About
+            </Link>
+
+            <Link
+              href="/multimedia"
+              className={`flex items-center gap-1.5 transition-colors duration-200 min-h-11 inline-flex px-1 ${
+                pathname === '/multimedia' ? 'text-[#C5A059]' : 'text-gray-400 hover:text-[#F3F4F6]'
+              }`}
+            >
+              <Play size={10} className="fill-current" />
+              Multimedia
             </Link>
 
             {navLinks.map((category) => {
@@ -154,6 +163,18 @@ export default function Navigation() {
                 }`}
               >
                 About
+              </Link>
+
+              <Link
+                href="/multimedia"
+                className={`flex items-center justify-between py-4 text-2xl font-serif border-b border-[#2F2A26]/50 transition-colors ${
+                  pathname === '/multimedia' ? 'text-[#C5A059]' : 'text-[#F3F4F6]'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Play size={18} className="text-[#C5A059] fill-[#C5A059]" />
+                  Multimedia
+                </span>
               </Link>
 
               {navLinks.map((category) => {
