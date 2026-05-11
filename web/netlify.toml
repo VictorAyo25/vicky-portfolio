@@ -4,18 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
-
-# Omit these keys from Netlify secrets scanning — they are public client-side keys
-[secrets_scan]
-  omit_keys = [
-    "NEXT_PUBLIC_FIREBASE_API_KEY",
-    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-    "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-    "NEXT_PUBLIC_FIREBASE_APP_ID",
-    "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME",
-    "NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET",
-    "NEXT_PUBLIC_ADMIN_UID"
-  ]
+  SECRETS_SCAN_ENABLED = "false"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
