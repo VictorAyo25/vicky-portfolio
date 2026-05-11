@@ -89,22 +89,22 @@ export default function MultimediaPage() {
                   style={{ backgroundImage: `url(${post.coverImage})` }}
                 />
 
-                {/* Overlay — always visible category, title on hover */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                 {/* Dim overlay — visible on hover/tap */}
+                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 group-active:bg-black/60 transition-colors duration-400 ease-out" />
 
-                {/* Category pill — always visible */}
-                <div className="absolute top-3 left-3 z-10">
-                  <span className="bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-sans uppercase tracking-[0.15em] text-[#C5A059] border border-[#C5A059]/15">
-                    {post.subCategory || post.category}
-                  </span>
-                </div>
+                 {/* Category pill — always visible */}
+                 <div className="absolute top-3 left-3 z-10">
+                   <span className="bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-sans uppercase tracking-[0.15em] text-[#C5A059] border border-[#C5A059]/15">
+                     {post.subCategory || post.category}
+                   </span>
+                 </div>
 
-                {/* Title — reveals on hover */}
-                <div className="absolute inset-x-0 bottom-0 p-3 md:p-4 z-10">
-                  <h3 className="text-sm md:text-base font-serif text-white leading-tight opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-400 drop-shadow-lg line-clamp-2">
-                    {post.title}
-                  </h3>
-                </div>
+                 {/* Title — centered, reveals on hover/tap */}
+                 <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6 z-10">
+                   <h3 className="text-sm md:text-base font-serif text-white text-center leading-tight opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 group-active:opacity-100 group-active:translate-y-0 transition-all duration-400 drop-shadow-lg line-clamp-3 px-2">
+                     {post.title}
+                   </h3>
+                 </div>
               </motion.article>
             ))}
           </div>
