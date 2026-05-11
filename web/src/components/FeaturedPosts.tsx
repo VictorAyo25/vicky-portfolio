@@ -85,6 +85,16 @@ export default function FeaturedPosts() {
     else if (info.offset.x > 40) goPrev();
   }, [goNext, goPrev]);
 
+  const handleMouseEnter = useCallback(() => {
+    setIsPaused(true);
+    setShowTitle(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsPaused(false);
+    setShowTitle(false);
+  }, []);
+
   if (loading) {
     return (
       <section className="pt-6 pb-10 md:pt-8 md:pb-14 px-4 md:px-8">
@@ -139,9 +149,9 @@ export default function FeaturedPosts() {
 
         {/* Carousel */}
         <div
-          className="relative overflow-hidden rounded-xl md:rounded-2xl"
-          onMouseEnter={() => setIsPaused(true)}
-          onMouseLeave={() => { setIsPaused(false); setShowTitle(false); }}
+          className="relative overflow-hidden rounded-xl md:rounded-2xl group"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         >
           <div className="aspect-[16/9] md:aspect-[21/9] relative">
             <AnimatePresence mode="popLayout" custom={direction}>
@@ -172,26 +182,34 @@ export default function FeaturedPosts() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-transparent to-transparent" />
 
-                {/* Content — title shows on touch/press */}
+                {/* Content — title shows on hover (desktop) or touch (mobile) */}
                 <div className="absolute inset-0 flex flex-col justify-end p-4 md:p-8 lg:p-10">
                   <div className="max-w-2xl">
                     <span className="inline-block bg-[#C5A059]/20 backdrop-blur-md border border-[#C5A059]/30 px-3 py-1 rounded-full text-[10px] md:text-[11px] font-sans uppercase tracking-[0.2em] text-[#C5A059] mb-2 md:mb-3">
                       {activePost.subCategory || activePost.category}
                     </span>
 
-                    <h3 className={`text-lg md:text-2xl lg:text-3xl font-serif text-white leading-tight mb-2 md:mb-3 drop-shadow-lg transition-all duration-300 ${
-                      showTitle ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-                    }`}>
-                      {activePost.title}
-                    </h3>
-
-                    <Link
-                      href={`/${activePost.slug}`}
-                      className="inline-flex items-center gap-2 bg-[#C5A059] text-[#0F0E0D] px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-[10px] md:text-[11px] uppercase tracking-widest hover:bg-[#d4b06a] active:scale-[0.97] transition-all duration-200"
+                    <motion.h3
+                      className="text-lg md:text-2xl lg:text-3xl font-serif text-white leading-tight mb-2 md:mb-3 drop-shadow-lg"
+                      animate={{ opacity: showTitle ? 1 : 0, y: showTitle ? 0 : 12 }}
+                      transition={{ duration: 0.3, ease: 'easeOut' }}
                     >
-                      Read Article
-                      <ChevronRight size={14} />
-                    </Link>
+                      {activePost.title}
+                    </motion.h3>
+
+                    <motion.div
+                      animate={{ opacity: showTitle ? 1 : 0, y: showTitle ? 0 : 8 }}
+                      transition={{ duration: 0.3, ease: 'easeOut', delay: 0.05 }}
+                    >
+                      <Link
+                        href={`/${activePost.slug}`}
+                        className="inline-flex items-center gap-2 bg-[#C5A059] text-[#0F0E0D] px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-[10px] md:text-[11px] uppercase tracking-widest hover:bg-[#d4b06a] active:scale-[0.97] transition-all duration-200"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        Read Article
+                        <ChevronRight size={14} />
+                      </Link>
+                    </motion.div>
                   </div>
                 </div>
               </motion.div>

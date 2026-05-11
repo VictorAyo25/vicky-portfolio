@@ -5,8 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { motion } from 'framer-motion';
-import { Loader2, Calendar, ArrowLeft, Tag, Clock } from 'lucide-react';
+import { Calendar, ArrowLeft, Tag, Clock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { SinglePostSkeleton } from '@/components/Skeleton';
 
 interface Post {
   id: string;
@@ -24,6 +25,7 @@ interface Post {
   published?: boolean;
   hasLargeContent?: boolean;
   contentChunks?: number;
+  slug?: string;
 }
 
 export default function SinglePostPage() {
@@ -33,6 +35,7 @@ export default function SinglePostPage() {
 
   const [post, setPost] = useState<Post | null>(null);
   const [fullContent, setFullContent] = useState<string>('');
+  const [relatedPosts, setRelatedPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -62,6 +65,21 @@ export default function SinglePostPage() {
           } else {
             setFullContent(postData.content || '');
           }
+
+          // Fetch related posts from same category
+          const relatedQuery = query(
+            collection(db, 'posts'),
+            where('category', '==', postData.category),
+            where('deleted', '==', false),
+            orderBy('createdAt', 'desc'),
+            limit(4)
+          );
+          const relatedSnapshot = await getDocs(relatedQuery);
+          const related = relatedSnapshot.docs
+            .map(d => ({ id: d.id, ...d.data() } as Post))
+            .filter(p => p.id !== postData.id)
+            .slice(0, 3);
+          setRelatedPosts(related);
         } else {
           router.push('/404');
         }
@@ -76,11 +94,7 @@ export default function SinglePostPage() {
   }, [slug, router]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0F0E0D] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#C5A059] animate-spin" />
-      </div>
-    );
+    return <SinglePostSkeleton />;
   }
 
   if (!post) return null;
@@ -204,6 +218,49 @@ export default function SinglePostPage() {
           className="post-content pb-16 md:pb-24"
           dangerouslySetInnerHTML={{ __html: fullContent }}
         />
+
+        {/* Related Posts */}
+        {relatedPosts.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+            className="border-t border-[#2F2A26]/60 pt-10 md:pt-14 pb-16 md:pb-24"
+          >
+            <h2 className="text-lg md:text-xl font-serif text-[#F3F4F6] mb-6 md:mb-8">
+              More in {post.category}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+              {relatedPosts.map((rp) => (
+                <Link
+                  key={rp.id}
+                  href={`/${rp.slug}`}
+                  className="group flex flex-col bg-[#141210] border border-[#2F2A26]/60 rounded-xl overflow-hidden hover:border-[#C5A059]/40 transition-all duration-300"
+                >
+                  {rp.coverImage && (
+                    <div className="aspect-[16/10] overflow-hidden">
+                      <div
+                        className="w-full h-full bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+                        style={{ backgroundImage: `url(${rp.coverImage})` }}
+                      />
+                    </div>
+                  )}
+                  <div className="p-4 md:p-5 flex flex-col flex-1">
+                    <span className="text-[9px] uppercase tracking-[0.15em] text-[#C5A059] font-sans mb-2">
+                      {rp.subCategory || rp.category}
+                    </span>
+                    <h3 className="text-sm md:text-base font-serif text-[#F3F4F6] leading-tight mb-3 group-hover:text-[#C5A059] transition-colors line-clamp-2">
+                      {rp.title}
+                    </h3>
+                    <div className="mt-auto flex items-center gap-1.5 text-[10px] text-gray-500 font-sans group-hover:text-[#C5A059] transition-colors">
+                      Read more <ArrowRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </motion.section>
+        )}
       </div>
     </article>
   );

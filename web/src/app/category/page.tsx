@@ -37,7 +37,7 @@ export default function CategoriesIndexPage() {
   const categories = taxonomy ? Object.keys(taxonomy) : [];
 
   return (
-    <main className="min-h-screen bg-[#110F0E] px-6 py-24 pb-32">
+    <main className="min-h-screen bg-[#0F0E0D] px-6 py-24 pb-32">
       <div className="max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

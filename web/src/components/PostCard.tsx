@@ -23,10 +23,15 @@ interface Post {
 export default function PostCard({ post, index }: { post: Post; index: number }) {
   // Use description as excerpt, fall back to content snippet
   const getExcerpt = () => {
+    const MAX_LEN = 150;
     if (post.description) return post.description;
     if (post.content) {
-      const text = post.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-      return text.length > 150 ? text.substring(0, 150) + '...' : text;
+      const text = post.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (text.length <= MAX_LEN) return text;
+      // Truncate at word boundary
+      const truncated = text.substring(0, MAX_LEN);
+      const lastSpace = truncated.lastIndexOf(' ');
+      return (lastSpace > 80 ? truncated.substring(0, lastSpace) : truncated) + '…';
     }
     return '';
   };

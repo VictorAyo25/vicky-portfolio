@@ -3,7 +3,7 @@ import { Playfair_Display, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ConditionalNavigation from "@/components/ConditionalNavigation";
 import { ToastProvider } from "@/context/ToastContext";
-import Link from "next/link";
+import ClientLayout from "./ClientLayout";
 
 const playfair = Playfair_Display({
   variable: "--font-serif",
@@ -26,6 +26,18 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Victoria Odueso | Writing Portfolio",
   description: "An elegant portfolio showcasing expertise in SaaS, Digital Marketing, and premium Content Strategy.",
+  openGraph: {
+    title: "Victoria Odueso | Writing Portfolio",
+    description: "An elegant portfolio showcasing expertise in SaaS, Digital Marketing, and premium Content Strategy.",
+    type: "website",
+    siteName: "Victoria Odueso Portfolio",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Victoria Odueso | Writing Portfolio",
+    description: "An elegant portfolio showcasing expertise in SaaS, Digital Marketing, and premium Content Strategy.",
+  },
 };
 
 export default function RootLayout({
@@ -38,14 +50,16 @@ export default function RootLayout({
       <body className="bg-[#0F0E0D] text-[#F3F4F6] min-h-screen flex flex-col selection:bg-[#C5A059] selection:text-[#0F0E0D]">
         <ToastProvider>
             <ConditionalNavigation />
-            {children}
+            <ClientLayout>
+              {children}
+            </ClientLayout>
 
-            {/* Subtle admin access — tiny, bottom-right, only the owner knows */}
-            <Link
+            {/* Admin access — small but clickable dot */}
+            <a
               href="/admin"
               aria-label="Admin"
-              className="fixed bottom-3 right-3 z-50 w-2 h-2 rounded-full bg-[#C5A059]/20 hover:bg-[#C5A059]/60 transition-colors duration-300"
               title="Admin Portal"
+              className="fixed bottom-4 right-4 z-50 w-3 h-3 rounded-full bg-[#C5A059]/25 hover:bg-[#C5A059]/70 transition-colors duration-300"
             />
         </ToastProvider>
       </body>
