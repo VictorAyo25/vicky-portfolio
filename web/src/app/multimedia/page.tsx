@@ -195,37 +195,33 @@ export default function MultimediaPage() {
                     )}
                   </AnimatePresence>
 
-                  {/* Title + details overlay */}
-                  <AnimatePresence>
-                    {isActive && (
-                      <motion.div
-                        className="absolute inset-0 flex flex-col items-center justify-end p-4 md:p-6 z-10 pointer-events-none"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3 }}
+                  {/* Title + details overlay — only shows when card is actively tapped */}
+                  {isActive && (
+                    <motion.div
+                      className="absolute inset-0 flex flex-col items-center justify-end p-4 md:p-6 z-10 pointer-events-none"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <motion.h3
+                        className="text-sm md:text-base font-serif text-white text-center leading-tight drop-shadow-lg line-clamp-3 px-2 mb-2"
+                        initial={{ y: 12, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.05 }}
                       >
-                        <motion.h3
-                          className="text-sm md:text-base font-serif text-white text-center leading-tight drop-shadow-lg line-clamp-3 px-2 mb-2"
-                          initial={{ y: 12, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          exit={{ y: 8, opacity: 0 }}
-                          transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.05 }}
-                        >
-                          {post.title}
-                        </motion.h3>
-                        <motion.p
-                          className="text-[10px] md:text-[11px] text-white/60 font-sans tracking-wide"
-                          initial={{ y: 8, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          exit={{ y: 4, opacity: 0 }}
-                          transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
-                        >
-                          Tap again to view
-                        </motion.p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                        {post.title}
+                      </motion.h3>
+                      <motion.p
+                        className="text-[10px] md:text-[11px] text-white/60 font-sans tracking-wide"
+                        initial={{ y: 8, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
+                      >
+                        Tap again to view
+                      </motion.p>
+                    </motion.div>
+                  )}
 
                   {/* Desktop hover title (CSS group-hover for instant response) */}
                   <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6 z-10 pointer-events-none">
