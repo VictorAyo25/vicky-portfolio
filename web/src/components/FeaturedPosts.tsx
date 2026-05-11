@@ -17,11 +17,10 @@ interface Post {
   deleted?: boolean;
 }
 
-const VISIBLE = 3;
 const ROTATE_INTERVAL = 5000;
 
 export default function FeaturedPosts() {
-  const [allPosts, setAllPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [direction, setDirection] = useState(0);
@@ -34,10 +33,10 @@ export default function FeaturedPosts() {
       try {
         const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
-        const posts = snapshot.docs
+        const fetched = snapshot.docs
           .map(d => ({ id: d.id, ...d.data() } as Post))
           .filter(p => p.coverImage && !p.deleted);
-        setAllPosts(posts);
+        setPosts(fetched);
       } catch (err) {
         console.error('Failed to fetch featured posts:', err);
       } finally {
@@ -47,27 +46,29 @@ export default function FeaturedPosts() {
     fetchPosts();
   }, []);
 
-  // Determine visible count: never show more cards than we have posts
-  const visibleCount = Math.min(VISIBLE, allPosts.length);
-  // Total pages: if posts <= visibleCount, just 1 page. Otherwise shift-by-1 for seamless loop.
-  const totalPages = allPosts.length <= visibleCount ? 1 : allPosts.length;
+  // Number of cards per page — always 3, or fewer if not enough posts
+  const perPage = Math.min(3, posts.length);
+  // How many unique pages we can show (shift by 1 for seamless loop)
+  const totalPages = Math.max(1, posts.length);
 
-  const getPagePosts = useCallback((p: number) => {
-    const posts: Post[] = [];
-    for (let i = 0; i < visibleCount; i++) {
-      posts.push(allPosts[(p + i) % allPosts.length]);
+  // Get posts for a given page, always returning exactly `perPage` valid posts
+  const getPagePosts = useCallback((p: number): Post[] => {
+    const result: Post[] = [];
+    for (let i = 0; i < perPage; i++) {
+      const idx = (p + i) % posts.length;
+      result.push(posts[idx]);
     }
-    return posts;
-  }, [allPosts, visibleCount]);
+    return result;
+  }, [posts, perPage]);
 
   const resetTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if (totalPages <= 1 || isPaused) return;
+    if (posts.length <= perPage || isPaused) return;
     timerRef.current = setInterval(() => {
       setDirection(1);
       setPage(prev => (prev + 1) % totalPages);
     }, ROTATE_INTERVAL);
-  }, [totalPages, isPaused]);
+  }, [posts.length, perPage, isPaused, totalPages]);
 
   useEffect(() => {
     resetTimer();
@@ -75,37 +76,38 @@ export default function FeaturedPosts() {
   }, [resetTimer]);
 
   const goNext = useCallback(() => {
-    if (totalPages <= 1) return;
+    if (posts.length <= perPage) return;
     setDirection(1);
     setPage(prev => (prev + 1) % totalPages);
     resetTimer();
-  }, [totalPages, resetTimer]);
+  }, [posts.length, perPage, totalPages, resetTimer]);
 
   const goPrev = useCallback(() => {
-    if (totalPages <= 1) return;
+    if (posts.length <= perPage) return;
     setDirection(-1);
     setPage(prev => (prev - 1 + totalPages) % totalPages);
     resetTimer();
-  }, [totalPages, resetTimer]);
+  }, [posts.length, perPage, totalPages, resetTimer]);
 
   const goTo = useCallback((idx: number) => {
-    if (totalPages <= 1) return;
+    if (posts.length <= perPage) return;
     setDirection(idx > page ? 1 : -1);
     setPage(idx);
     resetTimer();
-  }, [totalPages, page, resetTimer]);
+  }, [posts.length, perPage, page, resetTimer]);
 
   const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.x < -50) goNext();
     else if (info.offset.x > 50) goPrev();
   }, [goNext, goPrev]);
 
+  // Loading state
   if (loading) {
     return (
       <section className="pt-6 pb-12 md:pt-8 md:pb-16 px-4 md:px-8">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-3 gap-2 md:gap-3">
-            {Array.from({ length: VISIBLE }).map((_, i) => (
+            {[0, 1, 2].map(i => (
               <div key={i} className="aspect-[4/3] rounded-xl bg-[#191614] border border-[#2F2A26] animate-pulse" />
             ))}
           </div>
@@ -114,16 +116,19 @@ export default function FeaturedPosts() {
     );
   }
 
-  if (allPosts.length === 0) return null;
+  // No posts — render nothing
+  if (posts.length === 0) return null;
 
-  const canNavigate = totalPages > 1;
-  const pageKey = `page-${page}`;
-  const gridCols = visibleCount === 1 ? 'grid-cols-1' : visibleCount === 2 ? 'grid-cols-2' : 'grid-cols-3';
+  const canNavigate = posts.length > perPage;
+  const pageKey = `featured-${page}`;
+
+  // Dynamic grid columns based on how many cards we're actually showing
+  const gridClass = perPage === 1 ? 'grid-cols-1 max-w-md mx-auto' : perPage === 2 ? 'grid-cols-2 max-w-3xl mx-auto' : 'grid-cols-3';
 
   const slideVariants = {
-    enter: (dir: number) => ({ x: dir > 0 ? '25%' : '-25%', opacity: 0 }),
+    enter: (dir: number) => ({ x: dir > 0 ? '20%' : '-20%', opacity: 0 }),
     center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir > 0 ? '-25%' : '25%', opacity: 0 }),
+    exit: (dir: number) => ({ x: dir > 0 ? '-20%' : '20%', opacity: 0 }),
   };
 
   return (
@@ -181,7 +186,7 @@ export default function FeaturedPosts() {
               dragElastic={0.15}
               onDragEnd={handleDragEnd}
               style={{ x }}
-              className={`grid ${gridCols} gap-2 md:gap-3 touch-pan-y`}
+              className={`grid ${gridClass} gap-2 md:gap-3 touch-pan-y`}
             >
               {getPagePosts(page).map((post, i) => (
                 <GridCard key={`${post.id}-${page}-${i}`} post={post} index={i} />
