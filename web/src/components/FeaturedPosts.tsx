@@ -17,7 +17,7 @@ interface Post {
   deleted?: boolean;
 }
 
-const VISIBLE = 3; // number of cards visible per page
+const VISIBLE = 3;
 const ROTATE_INTERVAL = 5000;
 
 export default function FeaturedPosts() {
@@ -47,20 +47,20 @@ export default function FeaturedPosts() {
     fetchPosts();
   }, []);
 
-  const totalPages = Math.max(1, Math.ceil(allPosts.length / VISIBLE));
+  // Build a seamless list: duplicate posts so we never have blanks
+  const totalPages = allPosts.length; // each page shifts by 1, wrapping around
 
   const getPagePosts = useCallback((p: number) => {
-    const start = p * VISIBLE;
     const posts: Post[] = [];
     for (let i = 0; i < VISIBLE; i++) {
-      posts.push(allPosts[(start + i) % allPosts.length]);
+      posts.push(allPosts[(p + i) % allPosts.length]);
     }
     return posts;
   }, [allPosts]);
 
   const resetTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if (allPosts.length <= VISIBLE || isPaused) return;
+    if (allPosts.length <= 1 || isPaused) return;
     timerRef.current = setInterval(() => {
       setDirection(1);
       setPage(prev => (prev + 1) % totalPages);
@@ -105,13 +105,13 @@ export default function FeaturedPosts() {
 
   if (allPosts.length === 0) return null;
 
-  const canNavigate = allPosts.length > VISIBLE;
+  const canNavigate = allPosts.length > 1;
   const pageKey = `page-${page}`;
 
   const slideVariants = {
-    enter: (dir: number) => ({ x: dir > 0 ? '30%' : '-30%', opacity: 0 }),
+    enter: (dir: number) => ({ x: dir > 0 ? '25%' : '-25%', opacity: 0 }),
     center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir > 0 ? '-30%' : '30%', opacity: 0 }),
+    exit: (dir: number) => ({ x: dir > 0 ? '-25%' : '25%', opacity: 0 }),
   };
 
   return (
@@ -181,7 +181,7 @@ export default function FeaturedPosts() {
         {/* Dots */}
         {canNavigate && totalPages > 1 && (
           <div className="flex items-center justify-center gap-1.5 mt-4">
-            {Array.from({ length: totalPages }).map((_, i) => (
+            {Array.from({ length: Math.min(totalPages, 8) }).map((_, i) => (
               <button
                 key={i}
                 onClick={() => {
@@ -203,12 +203,19 @@ export default function FeaturedPosts() {
 }
 
 function GridCard({ post, index }: { post: Post; index: number }) {
+  const [touched, setTouched] = useState(false);
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.25, delay: index * 0.06 }}
       className="group relative aspect-[4/3] rounded-xl overflow-hidden cursor-pointer"
+      onTouchStart={() => setTouched(true)}
+      onTouchEnd={() => {
+        // Keep title visible briefly after touch
+        setTimeout(() => setTouched(false), 2000);
+      }}
     >
       <Link href={`/${post.slug}`} className="absolute inset-0 z-20" aria-label={post.title} />
 
@@ -218,19 +225,25 @@ function GridCard({ post, index }: { post: Post; index: number }) {
         style={{ backgroundImage: `url(${post.coverImage})` }}
       />
 
-      {/* Overlay — always subtle, darker on hover */}
-      <div className="absolute inset-0 bg-black/25 group-hover:bg-black/60 transition-all duration-400" />
+      {/* Overlay */}
+      <div className={`absolute inset-0 transition-all duration-400 ${
+        touched ? 'bg-black/60' : 'bg-black/25 group-hover:bg-black/60'
+      }`} />
 
-      {/* Category pill — always visible */}
+      {/* Category pill */}
       <div className="absolute top-2 left-2 z-10">
         <span className="bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-sans uppercase tracking-[0.15em] text-[#C5A059] border border-[#C5A059]/15">
           {post.subCategory || post.category}
         </span>
       </div>
 
-      {/* Title — reveals on hover */}
+      {/* Title — shows on hover (desktop) OR touch (mobile) */}
       <div className="absolute inset-x-0 bottom-0 p-2.5 md:p-3 z-10">
-        <h3 className="text-[11px] md:text-sm font-serif text-white leading-tight opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-400 drop-shadow-md line-clamp-2">
+        <h3 className={`text-[11px] md:text-sm font-serif text-white leading-tight transition-all duration-400 drop-shadow-md line-clamp-2 ${
+          touched
+            ? 'opacity-100 translate-y-0'
+            : 'opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0'
+        }`}>
           {post.title}
         </h3>
       </div>
