@@ -5,7 +5,7 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { motion, AnimatePresence, useMotionValue, PanInfo } from 'framer-motion';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
 
 interface Post {
   id: string;
@@ -17,11 +17,11 @@ interface Post {
   deleted?: boolean;
 }
 
-const ROTATE_INTERVAL = 5000;
+const ROTATE_INTERVAL = 4000;
 
 export default function FeaturedPosts() {
   const [posts, setPosts] = useState<Post[]>([]);
-  const [page, setPage] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [direction, setDirection] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -38,7 +38,7 @@ export default function FeaturedPosts() {
           .filter(p => p.coverImage && !p.deleted);
         setPosts(fetched);
       } catch (err) {
-        console.error('Failed to fetch featured posts:', err);
+        console.error('Failed to fetch multimedia content:', err);
       } finally {
         setLoading(false);
       }
@@ -46,29 +46,16 @@ export default function FeaturedPosts() {
     fetchPosts();
   }, []);
 
-  // Number of cards per page — always 3, or fewer if not enough posts
-  const perPage = Math.min(3, posts.length);
-  // How many unique pages we can show (shift by 1 for seamless loop)
   const totalPages = Math.max(1, posts.length);
-
-  // Get posts for a given page, always returning exactly `perPage` valid posts
-  const getPagePosts = useCallback((p: number): Post[] => {
-    const result: Post[] = [];
-    for (let i = 0; i < perPage; i++) {
-      const idx = (p + i) % posts.length;
-      result.push(posts[idx]);
-    }
-    return result;
-  }, [posts, perPage]);
 
   const resetTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if (posts.length <= perPage || isPaused) return;
+    if (posts.length <= 1 || isPaused) return;
     timerRef.current = setInterval(() => {
       setDirection(1);
-      setPage(prev => (prev + 1) % totalPages);
+      setActiveIndex(prev => (prev + 1) % totalPages);
     }, ROTATE_INTERVAL);
-  }, [posts.length, perPage, isPaused, totalPages]);
+  }, [posts.length, isPaused, totalPages]);
 
   useEffect(() => {
     resetTimer();
@@ -76,187 +63,190 @@ export default function FeaturedPosts() {
   }, [resetTimer]);
 
   const goNext = useCallback(() => {
-    if (posts.length <= perPage) return;
+    if (posts.length <= 1) return;
     setDirection(1);
-    setPage(prev => (prev + 1) % totalPages);
+    setActiveIndex(prev => (prev + 1) % totalPages);
     resetTimer();
-  }, [posts.length, perPage, totalPages, resetTimer]);
+  }, [posts.length, totalPages, resetTimer]);
 
   const goPrev = useCallback(() => {
-    if (posts.length <= perPage) return;
+    if (posts.length <= 1) return;
     setDirection(-1);
-    setPage(prev => (prev - 1 + totalPages) % totalPages);
+    setActiveIndex(prev => (prev - 1 + totalPages) % totalPages);
     resetTimer();
-  }, [posts.length, perPage, totalPages, resetTimer]);
-
-  const goTo = useCallback((idx: number) => {
-    if (posts.length <= perPage) return;
-    setDirection(idx > page ? 1 : -1);
-    setPage(idx);
-    resetTimer();
-  }, [posts.length, perPage, page, resetTimer]);
+  }, [posts.length, totalPages, resetTimer]);
 
   const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (info.offset.x < -50) goNext();
-    else if (info.offset.x > 50) goPrev();
+    if (info.offset.x < -40) goNext();
+    else if (info.offset.x > 40) goPrev();
   }, [goNext, goPrev]);
 
-  // Loading state
   if (loading) {
     return (
-      <section className="pt-6 pb-12 md:pt-8 md:pb-16 px-4 md:px-8">
+      <section className="pt-6 pb-10 md:pt-8 md:pb-14 px-4 md:px-8">
         <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-3 gap-2 md:gap-3">
-            {[0, 1, 2].map(i => (
-              <div key={i} className="aspect-[4/3] rounded-xl bg-[#191614] border border-[#2F2A26] animate-pulse" />
-            ))}
-          </div>
+          <div className="aspect-[16/9] md:aspect-[21/9] rounded-2xl bg-[#191614] border border-[#2F2A26] animate-pulse" />
         </div>
       </section>
     );
   }
 
-  // No posts — render nothing
   if (posts.length === 0) return null;
 
-  const canNavigate = posts.length > perPage;
-  const pageKey = `featured-${page}`;
-
-  // Dynamic grid columns based on how many cards we're actually showing
-  const gridClass = perPage === 1 ? 'grid-cols-1 max-w-md mx-auto' : perPage === 2 ? 'grid-cols-2 max-w-3xl mx-auto' : 'grid-cols-3';
+  const canNavigate = posts.length > 1;
+  const activePost = posts[activeIndex];
 
   const slideVariants = {
-    enter: (dir: number) => ({ x: dir > 0 ? '20%' : '-20%', opacity: 0 }),
+    enter: (dir: number) => ({ x: dir > 0 ? '100%' : '-100%', opacity: 0 }),
     center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir > 0 ? '-20%' : '20%', opacity: 0 }),
+    exit: (dir: number) => ({ x: dir > 0 ? '-100%' : '100%', opacity: 0 }),
   };
 
   return (
-    <section className="pt-6 pb-12 md:pt-8 md:pb-16 px-4 md:px-8">
+    <section className="pt-6 pb-10 md:pt-8 md:pb-14 px-4 md:px-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4 md:mb-5">
+        <div className="flex items-center justify-between mb-3 md:mb-4">
           <div className="flex items-center gap-3">
+            <Play size={12} className="text-[#C5A059] fill-[#C5A059]" />
             <span className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-[#C5A059] font-sans font-semibold">
-              Featured
+              Multimedia Content
             </span>
             {canNavigate && (
               <span className="text-[10px] text-gray-600 font-mono">
-                {String(page + 1).padStart(2, '0')}/{String(totalPages).padStart(2, '0')}
+                {String(activeIndex + 1).padStart(2, '0')}/{String(totalPages).padStart(2, '0')}
               </span>
             )}
           </div>
           {canNavigate && (
-            <div className="flex items-center gap-1.5">
+            <div className="hidden md:flex items-center gap-1.5">
               <button
                 onClick={goPrev}
-                className="w-8 h-8 md:w-9 md:h-9 rounded-full border border-[#2F2A26] flex items-center justify-center text-gray-500 hover:text-[#C5A059] hover:border-[#C5A059] transition-all duration-200 active:scale-90"
+                className="w-8 h-8 rounded-full border border-[#2F2A26] flex items-center justify-center text-gray-500 hover:text-[#C5A059] hover:border-[#C5A059] transition-all duration-200 active:scale-90"
                 aria-label="Previous"
               >
-                <ChevronLeft size={15} />
+                <ChevronLeft size={14} />
               </button>
               <button
                 onClick={goNext}
-                className="w-8 h-8 md:w-9 md:h-9 rounded-full border border-[#2F2A26] flex items-center justify-center text-gray-500 hover:text-[#C5A059] hover:border-[#C5A059] transition-all duration-200 active:scale-90"
+                className="w-8 h-8 rounded-full border border-[#2F2A26] flex items-center justify-center text-gray-500 hover:text-[#C5A059] hover:border-[#C5A059] transition-all duration-200 active:scale-90"
                 aria-label="Next"
               >
-                <ChevronRight size={15} />
+                <ChevronRight size={14} />
               </button>
             </div>
           )}
         </div>
 
-        {/* Grid Carousel */}
+        {/* Carousel — single image, auto-rotating */}
         <div
           className="relative overflow-hidden rounded-xl md:rounded-2xl"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
-          <AnimatePresence mode="popLayout" custom={direction}>
-            <motion.div
-              key={pageKey}
-              custom={direction}
-              variants={slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
-              drag={canNavigate ? 'x' : false}
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.15}
-              onDragEnd={handleDragEnd}
-              style={{ x }}
-              className={`grid ${gridClass} gap-2 md:gap-3 touch-pan-y`}
-            >
-              {getPagePosts(page).map((post, i) => (
-                <GridCard key={`${post.id}-${page}-${i}`} post={post} index={i} />
-              ))}
-            </motion.div>
-          </AnimatePresence>
+          <div className="aspect-[16/9] md:aspect-[21/9] relative">
+            <AnimatePresence mode="popLayout" custom={direction}>
+              <motion.div
+                key={activePost.id}
+                custom={direction}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
+                drag={canNavigate ? 'x' : false}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.15}
+                onDragEnd={handleDragEnd}
+                style={{ x }}
+                className="absolute inset-0 cursor-grab active:cursor-grabbing"
+              >
+                {/* Cover Image */}
+                <div
+                  className="absolute inset-0 bg-cover bg-center"
+                  style={{ backgroundImage: `url(${activePost.coverImage})` }}
+                />
+
+                {/* Gradient Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-transparent to-transparent" />
+
+                {/* Content */}
+                <div className="absolute inset-0 flex flex-col justify-end p-4 md:p-8 lg:p-10">
+                  <div className="max-w-2xl">
+                    <span className="inline-block bg-[#C5A059]/20 backdrop-blur-md border border-[#C5A059]/30 px-3 py-1 rounded-full text-[10px] md:text-[11px] font-sans uppercase tracking-[0.2em] text-[#C5A059] mb-2 md:mb-3">
+                      {activePost.subCategory || activePost.category}
+                    </span>
+                    <h3 className="text-lg md:text-2xl lg:text-3xl font-serif text-white leading-tight mb-2 md:mb-3 drop-shadow-lg">
+                      {activePost.title}
+                    </h3>
+                    <Link
+                      href={`/${activePost.slug}`}
+                      className="inline-flex items-center gap-2 bg-[#C5A059] text-[#0F0E0D] px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-[10px] md:text-[11px] uppercase tracking-widest hover:bg-[#d4b06a] active:scale-[0.97] transition-all duration-200"
+                    >
+                      Read Article
+                      <ChevronRight size={14} />
+                    </Link>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Mobile Navigation Arrows */}
+            {canNavigate && (
+              <>
+                <button
+                  onClick={goPrev}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 md:hidden w-9 h-9 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/80 active:scale-90 transition-transform z-10"
+                  aria-label="Previous"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  onClick={goNext}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 md:hidden w-9 h-9 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/80 active:scale-90 transition-transform z-10"
+                  aria-label="Next"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Progress Bar */}
+          {canNavigate && (
+            <div className="h-1 bg-[#191614]">
+              <motion.div
+                key={activeIndex}
+                initial={{ width: '0%' }}
+                animate={{ width: isPaused ? '0%' : '100%' }}
+                transition={{ duration: isPaused ? 0 : ROTATE_INTERVAL / 1000, ease: 'linear' }}
+                className="h-full bg-[#C5A059]"
+              />
+            </div>
+          )}
         </div>
 
         {/* Dots */}
         {canNavigate && totalPages > 1 && (
-          <div className="flex items-center justify-center gap-1.5 mt-4">
-            {Array.from({ length: Math.min(totalPages, 10) }).map((_, i) => (
+          <div className="flex items-center justify-center gap-1.5 mt-3 md:mt-4">
+            {Array.from({ length: Math.min(totalPages, 12) }).map((_, i) => (
               <button
                 key={i}
-                onClick={() => goTo(i)}
+                onClick={() => {
+                  setDirection(i > activeIndex ? 1 : -1);
+                  setActiveIndex(i);
+                  resetTimer();
+                }}
                 className={`h-1 rounded-full transition-all duration-300 ${
-                  i === page ? 'w-5 bg-[#C5A059]' : 'w-1 bg-[#2F2A26] hover:bg-[#59514A]'
+                  i === activeIndex ? 'w-5 bg-[#C5A059]' : 'w-1 bg-[#2F2A26] hover:bg-[#59514A]'
                 }`}
-                aria-label={`Go to page ${i + 1}`}
+                aria-label={`Go to slide ${i + 1}`}
               />
             ))}
           </div>
         )}
       </div>
     </section>
-  );
-}
-
-function GridCard({ post, index }: { post: Post; index: number }) {
-  const [touched, setTouched] = useState(false);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.25, delay: index * 0.06 }}
-      className="group relative aspect-[4/3] rounded-xl overflow-hidden cursor-pointer"
-      onTouchStart={() => setTouched(true)}
-      onTouchEnd={() => setTimeout(() => setTouched(false), 2500)}
-    >
-      <Link href={`/${post.slug}`} className="absolute inset-0 z-20" aria-label={post.title} />
-
-      {/* Image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center transition-transform duration-500 ease-out group-hover:scale-105"
-        style={{ backgroundImage: `url(${post.coverImage})` }}
-      />
-
-      {/* Overlay */}
-      <div className={`absolute inset-0 transition-all duration-400 ${
-        touched ? 'bg-black/60' : 'bg-black/20 group-hover:bg-black/60'
-      }`} />
-
-      {/* Category pill */}
-      <div className="absolute top-2 left-2 z-10">
-        <span className="bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-sans uppercase tracking-[0.15em] text-[#C5A059] border border-[#C5A059]/15">
-          {post.subCategory || post.category}
-        </span>
-      </div>
-
-      {/* Title — centered, shows on hover (desktop) OR touch (mobile) */}
-      <div className="absolute inset-0 flex items-center justify-center p-3 md:p-4 z-10">
-        <h3 className={`text-sm md:text-base font-serif text-white text-center leading-tight transition-all duration-400 drop-shadow-lg px-2 ${
-          touched
-            ? 'opacity-100 scale-100'
-            : 'opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100'
-        }`}>
-          {post.title}
-        </h3>
-      </div>
-    </motion.div>
   );
 }

@@ -1,34 +1,45 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ChevronDown, ArrowRight } from 'lucide-react';
-import { fetchTaxonomy, Taxonomy } from '@/lib/taxonomy';
+import { fetchTaxonomy, Taxonomy, INITIAL_TAXONOMY } from '@/lib/taxonomy';
 
 export default function Navigation() {
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
 
+  // Only run client-side
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
     async function loadData() {
       try {
         const data = await fetchTaxonomy();
-        setTaxonomy(data);
-      } catch (err) {
-        console.error("Nav taxonomy load failed", err);
+        if (!cancelled) setTaxonomy(data);
+      } catch {
+        if (!cancelled) setTaxonomy(INITIAL_TAXONOMY);
       }
     }
     loadData();
 
     const handleScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [mounted]);
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -38,11 +49,29 @@ export default function Navigation() {
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {
+    if (!mounted) return;
     document.body.style.overflow = mobileMenuOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
-  }, [mobileMenuOpen]);
+  }, [mobileMenuOpen, mounted]);
 
   const navLinks = taxonomy ? Object.keys(taxonomy) : [];
+
+  const toggleMobileMenu = useCallback(() => {
+    setMobileMenuOpen(prev => !prev);
+  }, []);
+
+  // Don't render until mounted to avoid hydration mismatch
+  if (!mounted) {
+    return (
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-transparent">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 md:h-20 flex items-center justify-between">
+          <Link href="/" className="font-serif text-xl md:text-2xl tracking-[0.15em] text-[#F3F4F6]">
+            VICTORIA<span className="text-[#C5A059]">.</span>
+          </Link>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <>
@@ -57,7 +86,6 @@ export default function Navigation() {
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 md:h-20 flex items-center justify-between">
-          {/* Logo */}
           <Link
             href="/"
             className="font-serif text-xl md:text-2xl tracking-[0.15em] text-[#F3F4F6] hover:text-[#C5A059] transition-colors duration-300 relative group min-h-11 inline-flex items-center"
@@ -111,7 +139,6 @@ export default function Navigation() {
                     <motion.span layoutId="nav-indicator" className="absolute -bottom-0.5 left-0 right-0 h-px bg-[#C5A059]" />
                   )}
 
-                  {/* Dropdown */}
                   <AnimatePresence>
                     {hoveredCategory === category && taxonomy && taxonomy[category]?.length > 0 && (
                       <motion.div
@@ -137,7 +164,6 @@ export default function Navigation() {
               );
             })}
 
-            {/* CTA */}
             <Link
               href="/contact"
               className={`ml-2 px-5 py-2.5 min-h-10 border rounded-full font-bold inline-flex items-center justify-center transition-all duration-300 ${
@@ -153,20 +179,10 @@ export default function Navigation() {
           {/* Mobile Menu Button */}
           <button
             className="lg:hidden text-[#F3F4F6] hover:text-[#C5A059] transition-colors min-h-11 min-w-11 inline-flex items-center justify-center active:scale-90"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            onClick={toggleMobileMenu}
             aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
           >
-            <AnimatePresence mode="wait">
-              {mobileMenuOpen ? (
-                <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
-                  <X size={26} />
-                </motion.div>
-              ) : (
-                <motion.div key="menu" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
-                  <Menu size={26} />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {mobileMenuOpen ? <X size={26} /> : <Menu size={26} />}
           </button>
         </div>
       </motion.nav>

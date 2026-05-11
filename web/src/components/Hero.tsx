@@ -1,31 +1,61 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from "next/link";
 import { ArrowRight, Download, Eye } from "lucide-react";
 import { motion } from "framer-motion";
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+
+interface HomeContent {
+  heroName: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  heroDescription: string;
+  ctaPrimaryText: string;
+  ctaSecondaryText: string;
+}
+
+const defaultContent: HomeContent = {
+  heroName: 'Victoria Odueso',
+  heroTitle: 'Exceptional Writer',
+  heroSubtitle: '& Content Strategist',
+  heroDescription: 'Crafting high-converting narratives for SaaS, FinTech, and modern brands. Where timeless quality meets data-driven performance.',
+  ctaPrimaryText: 'Explore Work',
+  ctaSecondaryText: 'About Me',
+};
 
 export default function Hero() {
+  const [content, setContent] = useState<HomeContent>(defaultContent);
+
+  useEffect(() => {
+    async function loadContent() {
+      try {
+        const snap = await getDoc(doc(db, 'pages', 'page_home'));
+        if (snap.exists()) {
+          setContent({ ...defaultContent, ...snap.data() } as HomeContent);
+        }
+      } catch {
+        // Use defaults if fetch fails
+      }
+    }
+    loadContent();
+  }, []);
+
   return (
     <section className="relative min-h-[90vh] flex flex-col items-center justify-center overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a1612] via-[#0F0E0D] to-[#0F0E0D]" />
-
-      {/* Subtle grid pattern */}
       <div className="absolute inset-0 opacity-[0.02]" style={{
         backgroundImage: `linear-gradient(rgba(197,160,89,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(197,160,89,0.3) 1px, transparent 1px)`,
         backgroundSize: '60px 60px'
       }} />
-
-      {/* Decorative orbs */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#C5A059]/[0.03] rounded-full blur-3xl" />
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-[#C5A059]/[0.02] rounded-full blur-3xl" />
-
-      {/* Top line */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#C5A059]/20 to-transparent" />
 
       {/* Content */}
       <div className="relative z-10 text-center max-w-5xl px-6 md:px-8">
-        {/* Overline */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -33,34 +63,30 @@ export default function Hero() {
           className="mb-6 md:mb-8"
         >
           <span className="text-[#C5A059] text-[11px] md:text-xs font-sans tracking-[0.3em] uppercase font-semibold border border-[#C5A059]/20 px-4 py-1.5 rounded-full">
-            Victoria Odueso
+            {content.heroName}
           </span>
         </motion.div>
 
-        {/* Main Heading */}
         <motion.h1
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4 }}
           className="text-4xl sm:text-6xl md:text-7xl lg:text-[5.5rem] font-serif text-[#F3F4F6] leading-[1.05] tracking-tight mb-4 md:mb-6"
         >
-          Exceptional Writer
+          {content.heroTitle}
           <br />
-          <span className="text-gray-500/50 italic">& Content Strategist</span>
+          <span className="text-gray-500/50 italic">{content.heroSubtitle}</span>
         </motion.h1>
 
-        {/* Subtitle */}
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.6 }}
           className="text-gray-400 text-base md:text-lg lg:text-xl font-sans max-w-2xl mx-auto leading-relaxed mb-8 md:mb-10"
         >
-          Crafting high-converting narratives for SaaS, FinTech, and modern brands.
-          Where timeless quality meets data-driven performance.
+          {content.heroDescription}
         </motion.p>
 
-        {/* CTA Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -72,7 +98,7 @@ export default function Hero() {
             className="group relative w-full sm:w-auto px-7 py-3.5 md:px-8 md:py-4 min-h-12 bg-[#C5A059] text-[#0F0E0D] font-bold uppercase tracking-[0.15em] text-[11px] md:text-xs rounded-full overflow-hidden transition-all duration-300 hover:shadow-[0_0_30px_rgba(197,160,89,0.3)] active:scale-[0.97] inline-flex items-center justify-center gap-2.5"
           >
             <span className="relative z-10 flex items-center gap-2.5">
-              Explore Work
+              {content.ctaPrimaryText}
               <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform duration-300" />
             </span>
           </Link>
@@ -81,11 +107,10 @@ export default function Hero() {
             href="/about"
             className="w-full sm:w-auto px-7 py-3.5 md:px-8 md:py-4 min-h-12 border border-[#2F2A26] text-gray-400 font-bold uppercase tracking-[0.15em] text-[11px] md:text-xs rounded-full hover:border-[#C5A059]/60 hover:text-[#C5A059] active:scale-[0.97] transition-all duration-300 inline-flex items-center justify-center gap-2"
           >
-            About Me
+            {content.ctaSecondaryText}
           </Link>
         </motion.div>
 
-        {/* CV Actions */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
