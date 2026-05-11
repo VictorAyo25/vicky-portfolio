@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 
 export default function Hero() {
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+    <section className="relative min-h-[90vh] flex flex-col items-center justify-center overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a1612] via-[#0F0E0D] to-[#0F0E0D]" />
 
@@ -118,10 +118,10 @@ export default function Hero() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1, delay: 1.5 }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+        className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5"
       >
-        <span className="text-[9px] text-gray-600 uppercase tracking-[0.3em] font-sans">Scroll</span>
-        <div className="w-px h-8 bg-gradient-to-b from-[#C5A059]/50 to-transparent animate-pulse" />
+        <span className="text-[8px] text-gray-600 uppercase tracking-[0.3em] font-sans">Scroll</span>
+        <div className="w-px h-5 bg-gradient-to-b from-[#C5A059]/40 to-transparent animate-pulse" />
       </motion.div>
     </section>
   );
