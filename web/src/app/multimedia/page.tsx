@@ -90,7 +90,7 @@ export default function MultimediaPage() {
                 />
 
                  {/* Dim overlay — visible on hover/tap */}
-                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 group-active:bg-black/60 transition-colors duration-400 ease-out" />
+                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 group-active:bg-black/60 group-focus-visible:bg-black/60 transition-colors duration-400 ease-out" />
 
                  {/* Category pill — always visible */}
                  <div className="absolute top-3 left-3 z-10">
@@ -99,9 +99,9 @@ export default function MultimediaPage() {
                    </span>
                  </div>
 
-                 {/* Title — centered, reveals on hover/tap */}
+                 {/* Title — centered, reveals on hover/tap/focus */}
                  <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6 z-10">
-                   <h3 className="text-sm md:text-base font-serif text-white text-center leading-tight opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 group-active:opacity-100 group-active:translate-y-0 transition-all duration-400 drop-shadow-lg line-clamp-3 px-2">
+                   <h3 className="text-sm md:text-base font-serif text-white text-center leading-tight opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 group-active:opacity-100 group-active:translate-y-0 group-focus-visible:opacity-100 group-focus-visible:translate-y-0 transition-all duration-400 drop-shadow-lg line-clamp-3 px-2 touch-title-visible">
                      {post.title}
                    </h3>
                  </div>

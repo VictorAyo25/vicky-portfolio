@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from "next/link";
-import { ArrowRight, Download, Eye } from "lucide-react";
+import { ArrowRight, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -115,18 +115,8 @@ export default function Hero() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 1.0 }}
-          className="flex items-center justify-center gap-4 md:gap-6"
+          className="flex items-center justify-center"
         >
-          <a
-            href="/Victoria_Odueso_CV.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex items-center gap-2 text-gray-500 hover:text-[#C5A059] transition-colors duration-300 text-[11px] md:text-xs font-sans tracking-wide"
-          >
-            <Eye size={14} className="group-hover:scale-110 transition-transform" />
-            <span>View CV</span>
-          </a>
-          <span className="w-1 h-1 bg-[#2F2A26] rounded-full" />
           <a
             href="/Victoria_Odueso_CV.pdf"
             download="Victoria_Odueso_CV.pdf"

@@ -344,3 +344,11 @@ a[aria-disabled='true'] {
   border: none;
   padding: 0;
 }
+
+/* ===== Multimedia mobile touch: always show title + dim overlay ===== */
+@media (hover: none) and (pointer: coarse) {
+  .touch-title-visible {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+  }
+}
