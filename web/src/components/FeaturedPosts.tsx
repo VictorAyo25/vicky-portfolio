@@ -47,25 +47,27 @@ export default function FeaturedPosts() {
     fetchPosts();
   }, []);
 
-  // Build a seamless list: duplicate posts so we never have blanks
-  const totalPages = allPosts.length; // each page shifts by 1, wrapping around
+  // Determine visible count: never show more cards than we have posts
+  const visibleCount = Math.min(VISIBLE, allPosts.length);
+  // Total pages: if posts <= visibleCount, just 1 page. Otherwise shift-by-1 for seamless loop.
+  const totalPages = allPosts.length <= visibleCount ? 1 : allPosts.length;
 
   const getPagePosts = useCallback((p: number) => {
     const posts: Post[] = [];
-    for (let i = 0; i < VISIBLE; i++) {
+    for (let i = 0; i < visibleCount; i++) {
       posts.push(allPosts[(p + i) % allPosts.length]);
     }
     return posts;
-  }, [allPosts]);
+  }, [allPosts, visibleCount]);
 
   const resetTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if (allPosts.length <= 1 || isPaused) return;
+    if (totalPages <= 1 || isPaused) return;
     timerRef.current = setInterval(() => {
       setDirection(1);
       setPage(prev => (prev + 1) % totalPages);
     }, ROTATE_INTERVAL);
-  }, [allPosts.length, isPaused, totalPages]);
+  }, [totalPages, isPaused]);
 
   useEffect(() => {
     resetTimer();
@@ -73,16 +75,25 @@ export default function FeaturedPosts() {
   }, [resetTimer]);
 
   const goNext = useCallback(() => {
+    if (totalPages <= 1) return;
     setDirection(1);
     setPage(prev => (prev + 1) % totalPages);
     resetTimer();
   }, [totalPages, resetTimer]);
 
   const goPrev = useCallback(() => {
+    if (totalPages <= 1) return;
     setDirection(-1);
     setPage(prev => (prev - 1 + totalPages) % totalPages);
     resetTimer();
   }, [totalPages, resetTimer]);
+
+  const goTo = useCallback((idx: number) => {
+    if (totalPages <= 1) return;
+    setDirection(idx > page ? 1 : -1);
+    setPage(idx);
+    resetTimer();
+  }, [totalPages, page, resetTimer]);
 
   const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.x < -50) goNext();
@@ -105,8 +116,9 @@ export default function FeaturedPosts() {
 
   if (allPosts.length === 0) return null;
 
-  const canNavigate = allPosts.length > 1;
+  const canNavigate = totalPages > 1;
   const pageKey = `page-${page}`;
+  const gridCols = visibleCount === 1 ? 'grid-cols-1' : visibleCount === 2 ? 'grid-cols-2' : 'grid-cols-3';
 
   const slideVariants = {
     enter: (dir: number) => ({ x: dir > 0 ? '25%' : '-25%', opacity: 0 }),
@@ -169,7 +181,7 @@ export default function FeaturedPosts() {
               dragElastic={0.15}
               onDragEnd={handleDragEnd}
               style={{ x }}
-              className="grid grid-cols-3 gap-2 md:gap-3 touch-pan-y"
+              className={`grid ${gridCols} gap-2 md:gap-3 touch-pan-y`}
             >
               {getPagePosts(page).map((post, i) => (
                 <GridCard key={`${post.id}-${page}-${i}`} post={post} index={i} />
@@ -181,14 +193,10 @@ export default function FeaturedPosts() {
         {/* Dots */}
         {canNavigate && totalPages > 1 && (
           <div className="flex items-center justify-center gap-1.5 mt-4">
-            {Array.from({ length: Math.min(totalPages, 8) }).map((_, i) => (
+            {Array.from({ length: Math.min(totalPages, 10) }).map((_, i) => (
               <button
                 key={i}
-                onClick={() => {
-                  setDirection(i > page ? 1 : -1);
-                  setPage(i);
-                  resetTimer();
-                }}
+                onClick={() => goTo(i)}
                 className={`h-1 rounded-full transition-all duration-300 ${
                   i === page ? 'w-5 bg-[#C5A059]' : 'w-1 bg-[#2F2A26] hover:bg-[#59514A]'
                 }`}
@@ -212,10 +220,7 @@ function GridCard({ post, index }: { post: Post; index: number }) {
       transition={{ duration: 0.25, delay: index * 0.06 }}
       className="group relative aspect-[4/3] rounded-xl overflow-hidden cursor-pointer"
       onTouchStart={() => setTouched(true)}
-      onTouchEnd={() => {
-        // Keep title visible briefly after touch
-        setTimeout(() => setTouched(false), 2000);
-      }}
+      onTouchEnd={() => setTimeout(() => setTouched(false), 2500)}
     >
       <Link href={`/${post.slug}`} className="absolute inset-0 z-20" aria-label={post.title} />
 
@@ -227,7 +232,7 @@ function GridCard({ post, index }: { post: Post; index: number }) {
 
       {/* Overlay */}
       <div className={`absolute inset-0 transition-all duration-400 ${
-        touched ? 'bg-black/60' : 'bg-black/25 group-hover:bg-black/60'
+        touched ? 'bg-black/60' : 'bg-black/20 group-hover:bg-black/60'
       }`} />
 
       {/* Category pill */}
@@ -237,12 +242,12 @@ function GridCard({ post, index }: { post: Post; index: number }) {
         </span>
       </div>
 
-      {/* Title — shows on hover (desktop) OR touch (mobile) */}
-      <div className="absolute inset-x-0 bottom-0 p-2.5 md:p-3 z-10">
-        <h3 className={`text-[11px] md:text-sm font-serif text-white leading-tight transition-all duration-400 drop-shadow-md line-clamp-2 ${
+      {/* Title — centered, shows on hover (desktop) OR touch (mobile) */}
+      <div className="absolute inset-0 flex items-center justify-center p-3 md:p-4 z-10">
+        <h3 className={`text-sm md:text-base font-serif text-white text-center leading-tight transition-all duration-400 drop-shadow-lg px-2 ${
           touched
-            ? 'opacity-100 translate-y-0'
-            : 'opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0'
+            ? 'opacity-100 scale-100'
+            : 'opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100'
         }`}>
           {post.title}
         </h3>
