@@ -49,9 +49,10 @@ export default function PostCard({ post, index }: { post: Post; index: number })
         <Link href={`/${post.slug}`} className="absolute inset-0 z-20 focus:outline-none" aria-label={post.title} />
 
         <div className="absolute inset-0 overflow-hidden">
-          <div 
-            className="absolute inset-0 bg-cover bg-center transition-transform duration-700 ease-out group-hover:scale-110"
-            style={{ backgroundImage: `url(${post.coverImage})` }}
+          <img
+            src={post.coverImage}
+            alt={post.title}
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
           />
         </div>
 

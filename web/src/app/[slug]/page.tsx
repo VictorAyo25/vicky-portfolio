@@ -110,9 +110,10 @@ export default function SinglePostPage() {
       {/* Cover Image */}
       {post.coverImage && (
         <div className="relative h-[40vh] md:h-[50vh] overflow-hidden">
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${post.coverImage})` }}
+          <img
+            src={post.coverImage}
+            alt={post.title}
+            className="absolute inset-0 w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0F0E0D] via-[#0F0E0D]/40 to-transparent" />
         </div>
@@ -239,9 +240,10 @@ export default function SinglePostPage() {
                 >
                   {rp.coverImage && (
                     <div className="aspect-[16/10] overflow-hidden">
-                      <div
-                        className="w-full h-full bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
-                        style={{ backgroundImage: `url(${rp.coverImage})` }}
+                      <img
+                        src={rp.coverImage}
+                        alt={rp.title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                     </div>
                   )}

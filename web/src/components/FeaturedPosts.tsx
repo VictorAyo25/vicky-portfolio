@@ -173,9 +173,10 @@ export default function FeaturedPosts() {
                 onTouchEnd={() => setTimeout(() => setShowTitle(false), 2000)}
               >
                 {/* Cover Image */}
-                <div
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{ backgroundImage: `url(${activePost.coverImage})` }}
+                <img
+                  src={activePost.coverImage}
+                  alt={activePost.title}
+                  className="absolute inset-0 w-full h-full object-cover"
                 />
 
                 {/* Gradient Overlay */}
