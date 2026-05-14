@@ -325,7 +325,10 @@ export default function CreatePost() {
       if (!response.ok) throw new Error(data?.error || 'Import failed');
       if (!title.trim() && data.title) setTitle(data.title);
       setContent(data.content || '');
-      showToast('Google Doc imported successfully.', 'success');
+      const imgMsg = data.imagesProcessed
+        ? ` (${data.imagesProcessed} image${data.imagesProcessed > 1 ? 's' : ''} uploaded to Cloudinary${data.imagesFailed ? `, ${data.imagesFailed} failed` : ''})`
+        : '';
+      showToast(`Google Doc imported successfully.${imgMsg}`, 'success');
     } catch (error) {
       console.error(error);
       showToast(error instanceof Error ? error.message : 'Failed to import document.', 'error');
