@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
@@ -8,7 +8,7 @@ import { doc, getDoc, updateDoc, setDoc, collection, query, getDocs, orderBy, wr
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { fetchTaxonomy, Taxonomy, addSubcategory } from '@/lib/taxonomy';
 import { useToast } from '@/context/ToastContext';
-import { Loader2, Save, Image as ImageIcon, Link as LinkIcon, Plus, ArrowLeft, UploadCloud, Images, Tag, FileText, X } from 'lucide-react';
+import { Loader2, Save, Image as ImageIcon, Link as LinkIcon, Plus, ArrowLeft, UploadCloud, Images, Tag, FileText, X, CloudOff, Cloud } from 'lucide-react';
 import Link from 'next/link';
 import RichTextEditor from '@/components/admin/RichTextEditor';
 import ImagePickerModal from '@/components/admin/ImagePickerModal';
@@ -31,6 +31,13 @@ interface EditablePost {
   contentChunks?: number;
 }
 
+const AUTOSAVE_DEBOUNCE_MS = 3000;
+const SAVE_TIMEOUT_MS = 30000;
+const LOCALSTORAGE_KEY_PREFIX = 'draft_post_';
+
+// Module-level store for draft data passed between effects (avoids window casting)
+let draftDataStore: Record<string, unknown> | null = null;
+
 export default function EditPostPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
@@ -38,6 +45,8 @@ export default function EditPostPage() {
 
   const [initialLoading, setInitialLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
 
   const [title, setTitle] = useState('');
@@ -70,6 +79,78 @@ export default function EditPostPage() {
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [importConfirm, setImportConfirm] = useState(false);
   const [mediaPickerTarget, setMediaPickerTarget] = useState<'media' | 'cover'>('media');
+
+  // Auto-save refs
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedState = useRef<string>('');
+  const isSavingRef = useRef(false);
+
+  // Track if form has changes
+  const formStateKey = useMemo(() => {
+    return JSON.stringify({ title, description, keywords, category, subCategory, content, mediaType, mediaUrl, coverImage });
+  }, [title, description, keywords, category, subCategory, content, mediaType, mediaUrl, coverImage]);
+
+  useEffect(() => {
+    const saved = lastSavedState.current;
+    setHasUnsavedChanges(formStateKey !== saved);
+  }, [formStateKey]);
+
+  // Load draft from localStorage on mount
+  useEffect(() => {
+    if (!id) return;
+    try {
+      const draftKey = `${LOCALSTORAGE_KEY_PREFIX}${id}`;
+      const draft = localStorage.getItem(draftKey);
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        const draftAge = Date.now() - (parsed.timestamp || 0);
+        // Only restore drafts less than 24 hours old
+        if (draftAge < 24 * 60 * 60 * 1000) {
+          // We'll apply draft data after the initial load
+          draftDataStore = parsed;
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, [id]);
+
+  // Auto-save to localStorage
+  const saveDraftLocal = useCallback(() => {
+    if (!id) return;
+    try {
+      const draftKey = `${LOCALSTORAGE_KEY_PREFIX}${id}`;
+      localStorage.setItem(draftKey, JSON.stringify({
+        title, description, keywords, category, subCategory, content, mediaType, mediaUrl, coverImage,
+        timestamp: Date.now(),
+      }));
+    } catch {
+      // Storage full or unavailable
+    }
+  }, [id, title, description, keywords, category, subCategory, content, mediaType, mediaUrl, coverImage]);
+
+  // Debounced auto-save
+  useEffect(() => {
+    if (initialLoading) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      saveDraftLocal();
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, [formStateKey, initialLoading, saveDraftLocal]);
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   // Keywords handlers
   const addKeyword = () => {
@@ -206,6 +287,39 @@ export default function EditPostPage() {
         } else {
           setContent(post.content || '');
         }
+
+        // Check for draft data
+        const draftData = draftDataStore as {
+          title: string; content: string; description: string; keywords: string[];
+          category: string; subCategory: string; mediaType: string; mediaUrl: string; coverImage: string;
+        } | undefined;
+        if (draftData) {
+          // Ask user if they want to restore draft
+          const restoreDraft = window.confirm('You have unsaved changes from a previous session. Restore them?');
+          if (restoreDraft) {
+            setTitle(draftData.title || post.title || '');
+            setContent(draftData.content || post.content || '');
+            setDescription(draftData.description || post.description || '');
+            setKeywords(draftData.keywords || post.keywords || []);
+            setCategory(draftData.category || post.category || '');
+            setSubCategory(draftData.subCategory || post.subCategory || '');
+            setMediaUrl(draftData.mediaUrl || post.mediaUrl || '');
+            setCoverImage(draftData.coverImage || post.coverImage || '');
+            showToast('Draft restored from local storage', 'success');
+          }
+          draftDataStore = null;
+          // Clear the draft either way
+          localStorage.removeItem(`${LOCALSTORAGE_KEY_PREFIX}${id}`);
+        }
+
+        // Mark initial state as saved
+        const initialState = JSON.stringify({
+          title: post.title || '', description: post.description || '', keywords: post.keywords || [],
+          category: post.category || '', subCategory: post.subCategory || '',
+          content: post.content || '', mediaType: post.mediaType === 'upload' ? 'upload' : 'url',
+          mediaUrl: post.mediaUrl || '', coverImage: post.coverImage || '',
+        });
+        lastSavedState.current = initialState;
       } catch (error) {
         console.error(error);
         showToast('Failed to load post', 'error');
@@ -230,110 +344,141 @@ export default function EditPostPage() {
       return;
     }
 
+    if (isSavingRef.current) {
+      showToast('Already saving, please wait...', 'error');
+      return;
+    }
+
+    isSavingRef.current = true;
     setSaving(true);
 
+    // Create a timeout promise that rejects after SAVE_TIMEOUT_MS
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Save timed out')), SAVE_TIMEOUT_MS)
+    );
+
     try {
-      let finalSubCategory = subCategory;
+      const savePromise = (async () => {
+        let finalSubCategory = subCategory;
 
-      if (isNewSubCategoryMode && newSubCategoryName.trim()) {
-        await addSubcategory(category, newSubCategoryName.trim());
-        finalSubCategory = newSubCategoryName.trim();
-      }
+        if (isNewSubCategoryMode && newSubCategoryName.trim()) {
+          await addSubcategory(category, newSubCategoryName.trim());
+          finalSubCategory = newSubCategoryName.trim();
+        }
 
-      const contentSize = Buffer.byteLength(content, 'utf8');
-      const MAX_CONTENT_SIZE = 900000;
-      
-      if (contentSize > MAX_CONTENT_SIZE) {
-        console.log(`Content is ${contentSize} bytes, splitting into chunks...`);
+        const contentSize = Buffer.byteLength(content, 'utf8');
+        const MAX_CONTENT_SIZE = 900000;
         
-        const chunks = [];
-        let remaining = content;
-        
-        while (remaining.length > 0) {
-          const chunkSize = Math.min(MAX_CONTENT_SIZE, remaining.length);
-          let breakPoint = chunkSize;
+        if (contentSize > MAX_CONTENT_SIZE) {
+          console.log(`Content is ${contentSize} bytes, splitting into chunks...`);
           
-          if (chunkSize < remaining.length) {
-            const lastPara = remaining.lastIndexOf('</p>', chunkSize);
-            if (lastPara > chunkSize * 0.5) {
-              breakPoint = lastPara + 4;
-            } else {
-              const lastBr = remaining.lastIndexOf('<br />', chunkSize);
-              if (lastBr > chunkSize * 0.5) {
-                breakPoint = lastBr + 6;
+          const chunks = [];
+          let remaining = content;
+          
+          while (remaining.length > 0) {
+            const chunkSize = Math.min(MAX_CONTENT_SIZE, remaining.length);
+            let breakPoint = chunkSize;
+            
+            if (chunkSize < remaining.length) {
+              const lastPara = remaining.lastIndexOf('</p>', chunkSize);
+              if (lastPara > chunkSize * 0.5) {
+                breakPoint = lastPara + 4;
               } else {
-                const lastPeriod = remaining.lastIndexOf('. ', chunkSize);
-                if (lastPeriod > chunkSize * 0.5) {
-                  breakPoint = lastPeriod + 2;
+                const lastBr = remaining.lastIndexOf('<br />', chunkSize);
+                if (lastBr > chunkSize * 0.5) {
+                  breakPoint = lastBr + 6;
+                } else {
+                  const lastPeriod = remaining.lastIndexOf('. ', chunkSize);
+                  if (lastPeriod > chunkSize * 0.5) {
+                    breakPoint = lastPeriod + 2;
+                  }
                 }
               }
             }
+            
+            chunks.push(remaining.substring(0, breakPoint));
+            remaining = remaining.substring(breakPoint);
           }
           
-          chunks.push(remaining.substring(0, breakPoint));
-          remaining = remaining.substring(breakPoint);
-        }
-        
-        await updateDoc(doc(db, 'posts', id), {
-          title,
-          description: description.trim(),
-          keywords,
-          category,
-          subCategory: finalSubCategory,
-          mediaType,
-          mediaUrl,
-          coverImage,
-          updatedAt: new Date(),
-          hasLargeContent: true,
-          contentChunks: chunks.length,
-          contentPreview: content.substring(0, 500) + '...',
-        });
-        
-        const oldChunksSnapshot = await getDocs(collection(db, 'posts', id, 'content'));
-        const batch = writeBatch(db);
-        oldChunksSnapshot.docs.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-        
-        for (let i = 0; i < chunks.length; i++) {
-          await setDoc(doc(db, 'posts', id, 'content', `chunk_${i}`), {
-            index: i,
-            content: chunks[i]
+          await updateDoc(doc(db, 'posts', id), {
+            title,
+            description: description.trim(),
+            keywords,
+            category,
+            subCategory: finalSubCategory,
+            mediaType,
+            mediaUrl,
+            coverImage,
+            updatedAt: new Date(),
+            hasLargeContent: true,
+            contentChunks: chunks.length,
+            contentPreview: content.substring(0, 500) + '...',
           });
-        }
-        
-        console.log(`Saved ${chunks.length} content chunks`);
-      } else {
-        await updateDoc(doc(db, 'posts', id), {
-          title,
-          description: description.trim(),
-          keywords,
-          category,
-          subCategory: finalSubCategory,
-          content,
-          mediaType,
-          mediaUrl,
-          coverImage,
-          updatedAt: new Date(),
-          hasLargeContent: false,
-          contentChunks: 0,
-          contentPreview: '',
-        });
-        
-        if (hasLargeContent) {
+          
           const oldChunksSnapshot = await getDocs(collection(db, 'posts', id, 'content'));
           const batch = writeBatch(db);
           oldChunksSnapshot.docs.forEach(d => batch.delete(d.ref));
           await batch.commit();
+          
+          for (let i = 0; i < chunks.length; i++) {
+            await setDoc(doc(db, 'posts', id, 'content', `chunk_${i}`), {
+              index: i,
+              content: chunks[i]
+            });
+          }
+          
+          console.log(`Saved ${chunks.length} content chunks`);
+        } else {
+          await updateDoc(doc(db, 'posts', id), {
+            title,
+            description: description.trim(),
+            keywords,
+            category,
+            subCategory: finalSubCategory,
+            content,
+            mediaType,
+            mediaUrl,
+            coverImage,
+            updatedAt: new Date(),
+            hasLargeContent: false,
+            contentChunks: 0,
+            contentPreview: '',
+          });
+          
+          if (hasLargeContent) {
+            const oldChunksSnapshot = await getDocs(collection(db, 'posts', id, 'content'));
+            const batch = writeBatch(db);
+            oldChunksSnapshot.docs.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
         }
-      }
+      })();
+
+      // Race save against timeout
+      await Promise.race([savePromise, timeoutPromise]);
+
+      // Success — update saved state
+      lastSavedState.current = formStateKey;
+      setLastSaved(new Date());
+      setHasUnsavedChanges(false);
+
+      // Clear draft
+      if (id) localStorage.removeItem(`${LOCALSTORAGE_KEY_PREFIX}${id}`);
 
       showToast('Post updated successfully', 'success');
       router.push('/admin/dashboard/posts');
     } catch (error) {
       console.error(error);
-      showToast('Failed to update post. Please try again.', 'error');
+      if (error instanceof Error && error.message === 'Save timed out') {
+        showToast('Save is taking too long. Your draft is saved locally — try again shortly.', 'error');
+      } else {
+        showToast('Failed to update post. Your draft is saved locally — try again.', 'error');
+      }
+      // Ensure local draft is saved on error
+      saveDraftLocal();
     } finally {
       setSaving(false);
+      isSavingRef.current = false;
     }
   };
 
@@ -409,21 +554,33 @@ export default function EditPostPage() {
   }
 
   return (
-    <div className="p-6 lg:p-10 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28 lg:pb-10">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-        <header className="mb-8 rounded-2xl border border-[#2F2A26] bg-[#171311] px-6 py-6 lg:px-8 lg:py-7">
+        <header className="mb-6 sm:mb-8 rounded-2xl border border-[#2F2A26] bg-[#171311] px-4 sm:px-6 py-4 sm:py-6 lg:px-8 lg:py-7">
           <div>
-            <Link href="/admin/dashboard/posts" className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-[#C5A059] mb-4 uppercase tracking-widest">
+            <Link href="/admin/dashboard/posts" className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-[#C5A059] mb-3 sm:mb-4 uppercase tracking-widest">
               <ArrowLeft size={14} />
               Back to Manage Content
             </Link>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-[#C5A059] mb-2">Editor</p>
-            <h1 className="text-2xl lg:text-3xl font-serif text-[#F3F4F6] mb-2">Edit Post</h1>
-            <p className="text-gray-400 text-sm">Update post details and content.</p>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-[#C5A059] mb-1 sm:mb-2">Editor</p>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-serif text-[#F3F4F6] mb-1 sm:mb-2">Edit Post</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-gray-400 text-sm">Update post details and content.</p>
+              {/* Save status indicator */}
+              <span className="inline-flex items-center gap-1.5 text-xs">
+                {hasUnsavedChanges ? (
+                  <><CloudOff size={12} className="text-amber-400" /><span className="text-amber-400">Unsaved changes</span></>
+                ) : lastSaved ? (
+                  <><Cloud size={12} className="text-emerald-400" /><span className="text-emerald-400">Saved {lastSaved.toLocaleTimeString()}</span></>
+                ) : (
+                  <><Cloud size={12} className="text-gray-500" /><span className="text-gray-500">Auto-saves locally</span></>
+                )}
+              </span>
+            </div>
           </div>
         </header>
 
-        <form onSubmit={handleUpdatePost} className="space-y-8 bg-[#191614] p-8 rounded-2xl border border-[#2F2A26]">
+        <form onSubmit={handleUpdatePost} className="space-y-6 sm:space-y-8 bg-[#191614] p-4 sm:p-6 lg:p-8 rounded-2xl border border-[#2F2A26]">
           {/* Title */}
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-widest text-[#C5A059]">Title <span className="text-red-400">*</span></label>
@@ -432,7 +589,7 @@ export default function EditPostPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter post title..."
-              className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600"
+              className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600 text-base"
               required
             />
           </div>
@@ -449,7 +606,7 @@ export default function EditPostPage() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="A brief tagline or summary of this post (shown on cards and SEO)..."
               rows={2}
-              className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600 resize-none"
+              className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600 resize-none text-base"
             />
             <p className="text-xs text-gray-500">A short 1-2 sentence description. Used for SEO meta description and post card previews.</p>
           </div>
@@ -468,12 +625,12 @@ export default function EditPostPage() {
                 onChange={(e) => setKeywordInput(e.target.value)}
                 onKeyDown={handleKeywordKeyDown}
                 placeholder="Type a keyword and press Enter..."
-                className="flex-1 bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-2.5 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600"
+                className="flex-1 bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-2.5 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600 text-base"
               />
               <button
                 type="button"
                 onClick={addKeyword}
-                className="px-4 py-2.5 rounded-lg border border-[#C5A059] text-[#C5A059] hover:bg-[#C5A059] hover:text-black transition-colors text-sm font-bold"
+                className="px-4 py-2.5 rounded-lg border border-[#C5A059] text-[#C5A059] hover:bg-[#C5A059] hover:text-black transition-colors text-sm font-bold flex-shrink-0"
               >
                 Add
               </button>
@@ -501,7 +658,7 @@ export default function EditPostPage() {
           </div>
 
           {/* Taxonomy */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-[#C5A059]">Category <span className="text-red-400">*</span></label>
               <select
@@ -511,7 +668,7 @@ export default function EditPostPage() {
                   setSubCategory('');
                   setIsNewSubCategoryMode(false);
                 }}
-                className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none appearance-none"
+                className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none appearance-none text-base"
                 required
               >
                 <option value="">Select Category</option>
@@ -542,13 +699,13 @@ export default function EditPostPage() {
                   value={newSubCategoryName}
                   onChange={(e) => setNewSubCategoryName(e.target.value)}
                   placeholder="Type new subcategory name..."
-                  className="w-full bg-[#0F0E0D] border border-[#C5A059] rounded-lg px-4 py-3 text-white focus:outline-none placeholder-gray-600"
+                  className="w-full bg-[#0F0E0D] border border-[#C5A059] rounded-lg px-4 py-3 text-white focus:outline-none placeholder-gray-600 text-base"
                 />
               ) : (
                 <select
                   value={subCategory}
                   onChange={(e) => setSubCategory(e.target.value)}
-                  className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none appearance-none disabled:opacity-50"
+                  className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none appearance-none disabled:opacity-50 text-base"
                   disabled={!category}
                 >
                   <option value="">Select Subcategory</option>
@@ -561,7 +718,7 @@ export default function EditPostPage() {
           </div>
 
           {/* Google Docs Import */}
-          <div className="space-y-3 border border-[#2F2A26] rounded-xl p-4 bg-[#171311]">
+          <div className="space-y-3 border border-[#2F2A26] rounded-xl p-3 sm:p-4 bg-[#171311]">
             <div className="flex flex-col gap-3 md:flex-row md:items-end">
               <div className="flex-1 space-y-2">
                 <label className="text-xs font-bold uppercase tracking-widest text-[#C5A059]">Import from Google Docs</label>
@@ -570,7 +727,7 @@ export default function EditPostPage() {
                   value={googleDocUrl}
                   onChange={(e) => setGoogleDocUrl(e.target.value)}
                   placeholder="https://docs.google.com/document/d/..."
-                  className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600"
+                  className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600 text-base"
                 />
                 <p className="text-xs text-gray-500">
                   Tip: set the Google Doc sharing to <span className="text-gray-300">Anyone with the link can view</span> before importing.
@@ -580,7 +737,7 @@ export default function EditPostPage() {
                 type="button"
                 onClick={handleImportFromGoogleDocs}
                 disabled={importingDoc}
-                className="px-5 py-3 rounded-lg border border-[#C5A059] text-[#C5A059] hover:bg-[#C5A059] hover:text-[#0F0E0D] transition-colors min-h-11 font-semibold text-sm disabled:opacity-50"
+                className="px-5 py-3 rounded-lg border border-[#C5A059] text-[#C5A059] hover:bg-[#C5A059] hover:text-[#0F0E0D] transition-colors min-h-11 font-semibold text-sm disabled:opacity-50 flex-shrink-0"
               >
                 {importingDoc ? 'Importing...' : 'Import Doc'}
               </button>
@@ -592,34 +749,48 @@ export default function EditPostPage() {
           {/* Media */}
           <div className="space-y-4 pt-4 border-t border-[#2F2A26]">
             <label className="text-xs font-bold uppercase tracking-widest text-[#C5A059]">Media Attachment</label>
-            <div className="flex flex-wrap gap-3 mb-4">
-              <button type="button" onClick={() => setMediaType('url')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${mediaType === 'url' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><LinkIcon size={16} />External URL</button>
-              <button type="button" onClick={() => setMediaType('upload')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${mediaType === 'upload' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><UploadCloud size={16} />Upload File</button>
-              <button type="button" onClick={() => { setMediaType('library'); openMediaPicker('media'); }} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${mediaType === 'library' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><Images size={16} />Pick from Library</button>
+            <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
+              <button type="button" onClick={() => setMediaType('url')} className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${mediaType === 'url' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><LinkIcon size={16} />External URL</button>
+              <button type="button" onClick={() => setMediaType('upload')} className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${mediaType === 'upload' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><UploadCloud size={16} />Upload File</button>
+              <button type="button" onClick={() => { setMediaType('library'); openMediaPicker('media'); }} className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${mediaType === 'library' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><Images size={16} />Pick from Library</button>
             </div>
-            {mediaType === 'url' ? (<><input type="url" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="https://..." className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none transition-all placeholder-gray-600" /><p className="text-xs text-gray-500">Paste a direct link to an image or PDF hosted elsewhere.</p></>) : mediaType === 'upload' ? (<div className="border border-dashed border-[#2F2A26] rounded-lg p-8 flex flex-col items-center justify-center bg-[#0F0E0D] text-gray-400">{mediaUploading ? (<div className="flex flex-col items-center"><Loader2 className="animate-spin text-[#C5A059] mb-2" size={24} /><span className="text-sm">Uploading to Cloudinary...</span></div>) : (<><UploadCloud size={32} className="mb-4 text-gray-500" /><label className="cursor-pointer bg-[#C5A059] text-black px-4 py-2 rounded font-bold text-sm hover:bg-[#d4b06a] transition-colors">Choose File<input type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => handleFileUpload(e, false)} /></label><p className="text-xs text-gray-500 mt-3">Supports JPG, PNG, WEBP, PDF</p></>)}</div>) : (<div className="border border-[#2F2A26] rounded-lg p-4 bg-[#0F0E0D]">{mediaUrl ? (<div className="flex items-center gap-4"><div className="w-16 h-16 rounded-lg overflow-hidden bg-[#191614] flex-shrink-0"><img src={mediaUrl} alt="Selected" className="w-full h-full object-cover" /></div><div className="flex-1 min-w-0"><p className="text-sm text-white font-medium">Image selected from library</p><p className="text-xs text-gray-500 truncate">{mediaUrl}</p></div><button type="button" onClick={() => { setMediaUrl(''); setMediaType('url'); }} className="text-xs text-gray-400 hover:text-red-400 transition-colors">Remove</button></div>) : (<button type="button" onClick={() => openMediaPicker('media')} className="w-full py-3 text-sm text-gray-400 hover:text-[#C5A059] transition-colors flex items-center justify-center gap-2"><Images size={18} />Browse Media Library</button>)}</div>)}
+            {mediaType === 'url' ? (<><input type="url" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="https://..." className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none transition-all placeholder-gray-600 text-base" /><p className="text-xs text-gray-500">Paste a direct link to an image or PDF hosted elsewhere.</p></>) : mediaType === 'upload' ? (<div className="border border-dashed border-[#2F2A26] rounded-lg p-6 sm:p-8 flex flex-col items-center justify-center bg-[#0F0E0D] text-gray-400">{mediaUploading ? (<div className="flex flex-col items-center"><Loader2 className="animate-spin text-[#C5A059] mb-2" size={24} /><span className="text-sm">Uploading to Cloudinary...</span></div>) : (<><UploadCloud size={32} className="mb-4 text-gray-500" /><label className="cursor-pointer bg-[#C5A059] text-black px-4 py-2 rounded font-bold text-sm hover:bg-[#d4b06a] transition-colors">Choose File<input type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => handleFileUpload(e, false)} /></label><p className="text-xs text-gray-500 mt-3">Supports JPG, PNG, WEBP, PDF</p></>)}</div>) : (<div className="border border-[#2F2A26] rounded-lg p-4 bg-[#0F0E0D]">{mediaUrl ? (<div className="flex items-center gap-4"><div className="w-16 h-16 rounded-lg overflow-hidden bg-[#191614] flex-shrink-0"><img src={mediaUrl} alt="Selected" className="w-full h-full object-cover" /></div><div className="flex-1 min-w-0"><p className="text-sm text-white font-medium">Image selected from library</p><p className="text-xs text-gray-500 truncate">{mediaUrl}</p></div><button type="button" onClick={() => { setMediaUrl(''); setMediaType('url'); }} className="text-xs text-gray-400 hover:text-red-400 transition-colors flex-shrink-0">Remove</button></div>) : (<button type="button" onClick={() => openMediaPicker('media')} className="w-full py-3 text-sm text-gray-400 hover:text-[#C5A059] transition-colors flex items-center justify-center gap-2"><Images size={16} />Browse Media Library</button>)}</div>)}
           </div>
 
           {/* Cover Image */}
           <div className="space-y-4 pt-4 border-t border-[#2F2A26]">
             <label className="text-xs font-bold uppercase tracking-widest text-[#C5A059]">Cover Image (For Grid/Home)</label>
-            <div className="flex flex-wrap gap-3 mb-4">
-              <button type="button" onClick={() => setCoverImageType('url')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${coverImageType === 'url' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><LinkIcon size={16} />External URL</button>
-              <button type="button" onClick={() => setCoverImageType('upload')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${coverImageType === 'upload' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><UploadCloud size={16} />Upload Image</button>
-              <button type="button" onClick={() => { setCoverImageType('library'); openMediaPicker('cover'); }} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${coverImageType === 'library' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><Images size={16} />Pick from Library</button>
+            <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
+              <button type="button" onClick={() => setCoverImageType('url')} className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${coverImageType === 'url' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><LinkIcon size={16} />External URL</button>
+              <button type="button" onClick={() => setCoverImageType('upload')} className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${coverImageType === 'upload' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><UploadCloud size={16} />Upload Image</button>
+              <button type="button" onClick={() => { setCoverImageType('library'); openMediaPicker('cover'); }} className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${coverImageType === 'library' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><Images size={16} />Pick from Library</button>
             </div>
-            {coverImageType === 'url' ? (<><input type="url" value={coverImage} onChange={(e) => setCoverImage(e.target.value)} placeholder="https://images.unsplash.com/..." className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none transition-all placeholder-gray-600" /><p className="text-xs text-gray-500">Paste a direct link for the image to show on the category grids and hover states.</p></>) : coverImageType === 'upload' ? (<div className="border border-dashed border-[#2F2A26] rounded-lg p-8 flex flex-col items-center justify-center bg-[#0F0E0D] text-gray-400">{coverUploading ? (<div className="flex flex-col items-center"><Loader2 className="animate-spin text-[#C5A059] mb-2" size={24} /><span className="text-sm">Uploading Cover...</span></div>) : (<><ImageIcon size={32} className="mb-4 text-gray-500" /><label className="cursor-pointer bg-[#C5A059] text-black px-4 py-2 rounded font-bold text-sm hover:bg-[#d4b06a] transition-colors">Choose Image<input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, true)} /></label><p className="text-xs text-gray-500 mt-3">Supports JPG, PNG, WEBP</p></>)}</div>) : (<div className="border border-[#2F2A26] rounded-lg p-4 bg-[#0F0E0D]">{coverImage ? (<div className="flex items-center gap-4"><div className="w-16 h-16 rounded-lg overflow-hidden bg-[#191614] flex-shrink-0"><img src={coverImage} alt="Selected cover" className="w-full h-full object-cover" /></div><div className="flex-1 min-w-0"><p className="text-sm text-white font-medium">Cover image selected from library</p><p className="text-xs text-gray-500 truncate">{coverImage}</p></div><button type="button" onClick={() => { setCoverImage(''); setCoverImageType('url'); }} className="text-xs text-gray-400 hover:text-red-400 transition-colors">Remove</button></div>) : (<button type="button" onClick={() => openMediaPicker('cover')} className="w-full py-3 text-sm text-gray-400 hover:text-[#C5A059] transition-colors flex items-center justify-center gap-2"><Images size={18} />Browse Media Library</button>)}</div>)}
+            {coverImageType === 'url' ? (<><input type="url" value={coverImage} onChange={(e) => setCoverImage(e.target.value)} placeholder="https://images.unsplash.com/..." className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none transition-all placeholder-gray-600 text-base" /><p className="text-xs text-gray-500">Paste a direct link for the image to show on the category grids and hover states.</p></>) : coverImageType === 'upload' ? (<div className="border border-dashed border-[#2F2A26] rounded-lg p-6 sm:p-8 flex flex-col items-center justify-center bg-[#0F0E0D] text-gray-400">{coverUploading ? (<div className="flex flex-col items-center"><Loader2 className="animate-spin text-[#C5A059] mb-2" size={24} /><span className="text-sm">Uploading Cover...</span></div>) : (<><ImageIcon size={32} className="mb-4 text-gray-500" /><label className="cursor-pointer bg-[#C5A059] text-black px-4 py-2 rounded font-bold text-sm hover:bg-[#d4b06a] transition-colors">Choose Image<input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, true)} /></label><p className="text-xs text-gray-500 mt-3">Supports JPG, PNG, WEBP</p></>)}</div>) : (<div className="border border-[#2F2A26] rounded-lg p-4 bg-[#0F0E0D]">{coverImage ? (<div className="flex items-center gap-4"><div className="w-16 h-16 rounded-lg overflow-hidden bg-[#191614] flex-shrink-0"><img src={coverImage} alt="Selected cover" className="w-full h-full object-cover" /></div><div className="flex-1 min-w-0"><p className="text-sm text-white font-medium">Cover image selected from library</p><p className="text-xs text-gray-500 truncate">{coverImage}</p></div><button type="button" onClick={() => { setCoverImage(''); setCoverImageType('url'); }} className="text-xs text-gray-400 hover:text-red-400 transition-colors flex-shrink-0">Remove</button></div>) : (<button type="button" onClick={() => openMediaPicker('cover')} className="w-full py-3 text-sm text-gray-400 hover:text-[#C5A059] transition-colors flex items-center justify-center gap-2"><Images size={16} />Browse Media Library</button>)}</div>)}
           </div>
 
-          <div className="pt-6 border-t border-[#2F2A26] flex justify-end gap-4">
-            <Link href="/admin/dashboard/posts" className="px-6 py-3 rounded-lg border border-[#2F2A26] text-gray-300 hover:text-white hover:border-[#C5A059] transition-colors">Cancel</Link>
-            <button type="submit" disabled={saving} className="flex items-center gap-2 bg-[#C5A059] text-black px-8 py-3 rounded-lg font-bold uppercase tracking-widest hover:bg-[#d4b06a] transition-colors disabled:opacity-50">
+          {/* Desktop save bar */}
+          <div className="pt-6 border-t border-[#2F2A26] flex flex-col sm:flex-row justify-end gap-3 sm:gap-4">
+            <Link href="/admin/dashboard/posts" className="px-6 py-3 rounded-lg border border-[#2F2A26] text-gray-300 hover:text-white hover:border-[#C5A059] transition-colors text-center">Cancel</Link>
+            <button type="submit" disabled={saving} className="flex items-center justify-center gap-2 bg-[#C5A059] text-black px-8 py-3 rounded-lg font-bold uppercase tracking-widest hover:bg-[#d4b06a] transition-colors disabled:opacity-50 min-h-[48px]">
               {saving ? <Loader2 className="animate-spin" /> : <Save size={18} />}
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>
       </motion.div>
+
+      {/* Mobile sticky save bar */}
+      <div className="fixed bottom-0 left-0 right-0 lg:hidden bg-[#171311]/95 backdrop-blur-md border-t border-[#2F2A26] p-3 z-50 safe-area-bottom">
+        <div className="flex items-center gap-3 max-w-5xl mx-auto">
+          <Link href="/admin/dashboard/posts" className="px-4 py-3 rounded-lg border border-[#2F2A26] text-gray-300 text-sm font-medium flex-shrink-0">
+            Cancel
+          </Link>
+          <button type="submit" form="edit-post-form" disabled={saving} className="flex-1 flex items-center justify-center gap-2 bg-[#C5A059] text-black px-6 py-3 rounded-lg font-bold uppercase tracking-widest hover:bg-[#d4b06a] transition-colors disabled:opacity-50 min-h-[48px] text-sm">
+            {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
 
       <ImagePickerModal
         isOpen={showMediaPicker}

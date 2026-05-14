@@ -61,6 +61,18 @@ a[aria-disabled='true'] {
   display: none;
 }
 
+/* Safe area for mobile devices with notches */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevent iOS zoom on focus for form elements */
+@media (max-width: 640px) {
+  select, input, textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* ===== Rich Text Editor Styles ===== */
 .rich-editor-content {
   line-height: 1.75;

@@ -56,7 +56,6 @@ export default function MultimediaPage() {
   }, []);
 
   const scheduleAutoDismiss = useCallback((postId: string) => {
-    // Clear existing timer for this card
     const existing = timers.current.get(postId);
     if (existing) clearTimeout(existing);
 
@@ -71,17 +70,14 @@ export default function MultimediaPage() {
   const handleCardClick = useCallback((e: React.MouseEvent | React.TouchEvent, post: Post) => {
     e.stopPropagation();
 
-    // If this was a long-press, ignore the click
     if (isLongPress.current) {
       isLongPress.current = false;
       return;
     }
 
     if (activeId === post.id) {
-      // Second tap/click: navigate
       window.location.href = `/${post.slug}`;
     } else {
-      // First tap: reveal
       setActiveId(post.id);
       scheduleAutoDismiss(post.id);
     }
@@ -147,19 +143,25 @@ export default function MultimediaPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: i * 0.05 }}
-                  className="group relative aspect-[4/3] rounded-xl overflow-hidden cursor-pointer select-none"
+                  className="group relative aspect-[4/3] rounded-xl overflow-hidden cursor-pointer select-none bg-[#141210]"
                   onContextMenu={e => e.preventDefault()}
                   onClick={e => handleCardClick(e, post)}
                   onTouchStart={handleTouchStart}
                   onTouchEnd={handleTouchEnd}
                 >
-                  {/* Cover Image */}
+                  {/* Cover Image — full size with object-contain so nothing is cropped */}
                   <motion.div
-                    className="absolute inset-0 bg-cover bg-center pointer-events-none"
-                    style={{ backgroundImage: `url(${post.coverImage})` }}
+                    className="absolute inset-0 pointer-events-none flex items-center justify-center"
                     animate={{ scale: isActive ? 1.05 : 1 }}
                     transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                  />
+                  >
+                    <img
+                      src={post.coverImage}
+                      alt={post.title}
+                      className="w-full h-full object-contain"
+                      loading="lazy"
+                    />
+                  </motion.div>
 
                   {/* Dim overlay */}
                   <motion.div
