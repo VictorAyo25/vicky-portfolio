@@ -66,7 +66,6 @@ export default function SinglePostPage() {
             setFullContent(postData.content || '');
           }
 
-          // Fetch related posts from same category
           const relatedQuery = query(
             collection(db, 'posts'),
             where('category', '==', postData.category),
@@ -107,13 +106,13 @@ export default function SinglePostPage() {
 
   return (
     <article className="min-h-screen bg-[#0F0E0D] text-[#F3F4F6]">
-      {/* Cover Image */}
+      {/* Cover Image — full image visible, no cropping */}
       {post.coverImage && (
-        <div className="relative h-[40vh] md:h-[50vh] overflow-hidden">
+        <div className="relative h-[40vh] md:h-[50vh] overflow-hidden bg-[#0F0E0D]">
           <img
             src={post.coverImage}
             alt={post.title}
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-contain"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0F0E0D] via-[#0F0E0D]/40 to-transparent" />
         </div>
@@ -137,7 +136,6 @@ export default function SinglePostPage() {
           transition={{ duration: 0.5 }}
           className="mb-8 md:mb-12"
         >
-          {/* Category */}
           <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-4 md:mb-5">
             <span className="inline-flex items-center gap-1.5 bg-[#C5A059]/10 border border-[#C5A059]/20 px-3 py-1 rounded-full text-[10px] md:text-[11px] font-sans uppercase tracking-[0.15em] text-[#C5A059] font-semibold">
               <Tag size={11} />
@@ -150,19 +148,16 @@ export default function SinglePostPage() {
             )}
           </div>
 
-          {/* Title */}
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[3.25rem] font-serif leading-[1.1] text-[#F3F4F6] mb-4 md:mb-5 tracking-tight">
             {post.title}
           </h1>
 
-          {/* Description */}
           {post.description && (
             <p className="text-base md:text-lg text-gray-400 font-serif italic leading-relaxed mb-5 md:mb-6">
               {post.description}
             </p>
           )}
 
-          {/* Meta */}
           <div className="flex flex-wrap items-center gap-3 md:gap-4 text-[11px] text-gray-500 font-sans">
             <span className="flex items-center gap-1.5">
               <Calendar size={13} className="text-[#C5A059]/60" />
@@ -175,7 +170,6 @@ export default function SinglePostPage() {
             </span>
           </div>
 
-          {/* Keywords */}
           {post.keywords && post.keywords.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-5 md:mt-6">
               {post.keywords.map((kw, i) => (
@@ -200,7 +194,7 @@ export default function SinglePostPage() {
           >
             {post.mediaUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={post.mediaUrl} alt={post.title} className="w-full h-auto object-cover" />
+              <img src={post.mediaUrl} alt={post.title} className="w-full h-auto object-contain" />
             ) : (
               <div className="p-6 md:p-8 bg-[#141210] text-center">
                 <a href={post.mediaUrl} target="_blank" rel="noreferrer" className="text-[#C5A059] underline hover:text-white transition-colors text-sm">
@@ -239,11 +233,11 @@ export default function SinglePostPage() {
                   className="group flex flex-col bg-[#141210] border border-[#2F2A26]/60 rounded-xl overflow-hidden hover:border-[#C5A059]/40 transition-all duration-300"
                 >
                   {rp.coverImage && (
-                    <div className="aspect-[16/10] overflow-hidden">
+                    <div className="aspect-[16/10] overflow-hidden bg-[#0F0E0D]">
                       <img
                         src={rp.coverImage}
                         alt={rp.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
                       />
                     </div>
                   )}

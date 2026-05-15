@@ -168,15 +168,15 @@ export default function FeaturedPosts() {
                 dragElastic={0.15}
                 onDragEnd={handleDragEnd}
                 style={{ x }}
-                className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                className="absolute inset-0 cursor-grab active:cursor-grabbing bg-[#0F0E0D]"
                 onTouchStart={() => setShowTitle(true)}
                 onTouchEnd={() => setTimeout(() => setShowTitle(false), 2000)}
               >
-                {/* Cover Image */}
+                {/* Cover Image — full image visible, no cropping */}
                 <img
                   src={activePost.coverImage}
                   alt={activePost.title}
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-contain"
                 />
 
                 {/* Gradient Overlay */}

@@ -21,14 +21,12 @@ interface Post {
 }
 
 export default function PostCard({ post, index }: { post: Post; index: number }) {
-  // Use description as excerpt, fall back to content snippet
   const getExcerpt = () => {
     const MAX_LEN = 150;
     if (post.description) return post.description;
     if (post.content) {
       const text = post.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
       if (text.length <= MAX_LEN) return text;
-      // Truncate at word boundary
       const truncated = text.substring(0, MAX_LEN);
       const lastSpace = truncated.lastIndexOf(' ');
       return (lastSpace > 80 ? truncated.substring(0, lastSpace) : truncated) + '…';
@@ -44,7 +42,7 @@ export default function PostCard({ post, index }: { post: Post; index: number })
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: index * 0.1 }}
-        className="group relative flex flex-col h-[400px] rounded-xl overflow-hidden cursor-pointer border border-[#2F2A26] hover:border-[#C5A059] transition-colors bg-[#110F0E]"
+        className="group relative flex flex-col h-[400px] rounded-xl overflow-hidden cursor-pointer border border-[#2F2A26] hover:border-[#C5A059] transition-colors bg-[#0F0E0D]"
       >
         <Link href={`/${post.slug}`} className="absolute inset-0 z-20 focus:outline-none" aria-label={post.title} />
 
@@ -52,7 +50,7 @@ export default function PostCard({ post, index }: { post: Post; index: number })
           <img
             src={post.coverImage}
             alt={post.title}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+            className="absolute inset-0 w-full h-full object-contain transition-transform duration-700 ease-out group-hover:scale-110"
           />
         </div>
 
@@ -126,7 +124,6 @@ export default function PostCard({ post, index }: { post: Post; index: number })
           </p>
         )}
 
-        {/* Keywords */}
         {post.keywords && post.keywords.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-4">
             {post.keywords.slice(0, 3).map((kw, i) => (
