@@ -8,7 +8,7 @@ import { doc, getDoc, updateDoc, setDoc, collection, query, getDocs, orderBy, wr
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { fetchTaxonomy, Taxonomy, addSubcategory } from '@/lib/taxonomy';
 import { useToast } from '@/context/ToastContext';
-import { Loader2, Save, Image as ImageIcon, Link as LinkIcon, Plus, ArrowLeft, UploadCloud, Images, Tag, FileText, X, CloudOff, Cloud } from 'lucide-react';
+import { Loader2, Save, Image as ImageIcon, Link as LinkIcon, Plus, ArrowLeft, UploadCloud, Images, Tag, FileText, X, CloudOff, Cloud, FileUp, Upload } from 'lucide-react';
 import Link from 'next/link';
 import RichTextEditor from '@/components/admin/RichTextEditor';
 import ImagePickerModal from '@/components/admin/ImagePickerModal';
@@ -74,6 +74,14 @@ export default function EditPostPage() {
   const [newSubCategoryName, setNewSubCategoryName] = useState('');
   const [googleDocUrl, setGoogleDocUrl] = useState('');
   const [importingDoc, setImportingDoc] = useState(false);
+
+  // PDF import state
+  const [pdfSource, setPdfSource] = useState<'file' | 'gdrive'>('file');
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfDriveUrl, setPdfDriveUrl] = useState('');
+  const [importingPdf, setImportingPdf] = useState(false);
+  const [pdfImportConfirm, setPdfImportConfirm] = useState(false);
+  const pdfFileInputRef = useRef<HTMLInputElement>(null);
 
   // Image picker modal state
   const [showMediaPicker, setShowMediaPicker] = useState(false);
@@ -482,6 +490,8 @@ export default function EditPostPage() {
     }
   };
 
+  // ─── Google Docs Import ──────────────────────────────────────────────────
+
   const handleImportFromGoogleDocs = async () => {
     if (!googleDocUrl.trim()) {
       showToast('Please paste a Google Docs URL first.', 'error');
@@ -548,6 +558,83 @@ export default function EditPostPage() {
       showToast(error instanceof Error ? error.message : 'Failed to import document.', 'error');
     } finally {
       setImportingDoc(false);
+    }
+  };
+
+  // ─── PDF Import ──────────────────────────────────────────────────────────
+
+  const handlePdfFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPdfFile(file);
+    }
+  };
+
+  const handleImportPdf = async () => {
+    if (pdfSource === 'file' && !pdfFile) {
+      showToast('Please select a PDF file first.', 'error');
+      return;
+    }
+    if (pdfSource === 'gdrive' && !pdfDriveUrl.trim()) {
+      showToast('Please paste a Google Drive link first.', 'error');
+      return;
+    }
+    const hasExistingContent = getPlainText(content).length > 0;
+    if (hasExistingContent) {
+      setPdfImportConfirm(true);
+      return;
+    }
+    await doImportPdf();
+  };
+
+  const doImportPdf = async () => {
+    setPdfImportConfirm(false);
+    setImportingPdf(true);
+    try {
+      let response: Response;
+
+      if (pdfSource === 'file' && pdfFile) {
+        const formData = new FormData();
+        formData.append('file', pdfFile);
+        response = await fetch('/api/import/pdf', {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        response = await fetch('/api/import/pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: pdfDriveUrl.trim() }),
+        });
+      }
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Import failed');
+
+      if (!title.trim() && data.title) setTitle(data.title);
+      setContent(data.content || '');
+
+      const parts: string[] = ['PDF imported successfully'];
+      if (data.imagesProcessed) {
+        parts.push(`${data.imagesProcessed} image${data.imagesProcessed > 1 ? 's' : ''} extracted & uploaded to Cloudinary`);
+      }
+      if (data.imagesFailed) {
+        parts.push(`${data.imagesFailed} image${data.imagesFailed > 1 ? 's' : ''} failed`);
+      }
+      if (data.pageCount) {
+        parts.push(`(${data.pageCount} page${data.pageCount > 1 ? 's' : ''})`);
+      }
+      showToast(parts.join(' — '), 'success');
+
+      // Reset PDF state
+      setPdfFile(null);
+      setPdfDriveUrl('');
+      if (pdfFileInputRef.current) pdfFileInputRef.current.value = '';
+    } catch (error) {
+      console.error(error);
+      showToast(error instanceof Error ? error.message : 'Failed to import PDF.', 'error');
+    } finally {
+      setImportingPdf(false);
     }
   };
 
@@ -750,6 +837,94 @@ export default function EditPostPage() {
             </div>
           </div>
 
+          {/* PDF Import */}
+          <div className="space-y-3 border border-[#2F2A26] rounded-xl p-3 sm:p-4 bg-[#171311]">
+            <label className="text-xs font-bold uppercase tracking-widest text-[#C5A059] flex items-center gap-2">
+              <FileUp size={14} /> Import from PDF
+            </label>
+
+            {/* Source toggle */}
+            <div className="flex gap-2 mb-1">
+              <button
+                type="button"
+                onClick={() => setPdfSource('file')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${pdfSource === 'file' ? 'bg-[#C5A059] text-black' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26] hover:text-[#C5A059]'}`}
+              >
+                <Upload size={12} /> Upload PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => setPdfSource('gdrive')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${pdfSource === 'gdrive' ? 'bg-[#C5A059] text-black' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26] hover:text-[#C5A059]'}`}
+              >
+                <LinkIcon size={12} /> Google Drive Link
+              </button>
+            </div>
+
+            {pdfSource === 'file' ? (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <div className="border border-dashed border-[#2F2A26] rounded-lg p-4 sm:p-5 flex flex-col items-center justify-center bg-[#0F0E0D] text-gray-400">
+                    {pdfFile ? (
+                      <div className="flex items-center gap-3 w-full">
+                        <FileUp size={20} className="text-[#C5A059] flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white font-medium truncate">{pdfFile.name}</p>
+                          <p className="text-xs text-gray-500">{(pdfFile.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setPdfFile(null); if (pdfFileInputRef.current) pdfFileInputRef.current.value = ''; }}
+                          className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <FileUp size={24} className="mb-2 text-gray-500" />
+                        <label className="cursor-pointer bg-[#C5A059] text-black px-4 py-2 rounded font-bold text-sm hover:bg-[#d4b06a] transition-colors">
+                          Choose PDF File
+                          <input ref={pdfFileInputRef} type="file" className="hidden" accept=".pdf,application/pdf" onChange={handlePdfFileSelect} />
+                        </label>
+                        <p className="text-xs text-gray-500 mt-2">Supports PDF files up to 10MB</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleImportPdf}
+                  disabled={importingPdf || !pdfFile}
+                  className="px-5 py-3 rounded-lg border border-[#C5A059] text-[#C5A059] hover:bg-[#C5A059] hover:text-[#0F0E0D] transition-colors min-h-11 font-semibold text-sm disabled:opacity-50 flex-shrink-0"
+                >
+                  {importingPdf ? 'Importing...' : 'Import PDF'}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex-1 space-y-2">
+                  <input
+                    type="url"
+                    value={pdfDriveUrl}
+                    onChange={(e) => setPdfDriveUrl(e.target.value)}
+                    placeholder="https://drive.google.com/file/d/..."
+                    className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600 text-base"
+                  />
+                  <p className="text-xs text-gray-500">Tip: set the Google Drive file sharing to <span className="text-gray-300">Anyone with the link can view</span> before importing.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleImportPdf}
+                  disabled={importingPdf || !pdfDriveUrl.trim()}
+                  className="px-5 py-3 rounded-lg border border-[#C5A059] text-[#C5A059] hover:bg-[#C5A059] hover:text-[#0F0E0D] transition-colors min-h-11 font-semibold text-sm disabled:opacity-50 flex-shrink-0"
+                >
+                  {importingPdf ? 'Importing...' : 'Import PDF'}
+                </button>
+              </div>
+            )}
+          </div>
+
           <RichTextEditor label="Content" value={content} onChange={setContent} />
 
           {/* Media */}
@@ -760,7 +935,7 @@ export default function EditPostPage() {
               <button type="button" onClick={() => setMediaType('upload')} className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${mediaType === 'upload' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><UploadCloud size={16} />Upload File</button>
               <button type="button" onClick={() => { setMediaType('library'); openMediaPicker('media'); }} className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${mediaType === 'library' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><Images size={16} />Pick from Library</button>
             </div>
-            {mediaType === 'url' ? (<><input type="url" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="https://..." className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none transition-all placeholder-gray-600 text-base" /><p className="text-xs text-gray-500">Paste a direct link to an image or PDF hosted elsewhere.</p></>) : mediaType === 'upload' ? (<div className="border border-dashed border-[#2F2A26] rounded-lg p-6 sm:p-8 flex flex-col items-center justify-center bg-[#0F0E0D] text-gray-400">{mediaUploading ? (<div className="flex flex-col items-center"><Loader2 className="animate-spin text-[#C5A059] mb-2" size={24} /><span className="text-sm">Uploading to Cloudinary...</span></div>) : (<><UploadCloud size={32} className="mb-4 text-gray-500" /><label className="cursor-pointer bg-[#C5A059] text-black px-4 py-2 rounded font-bold text-sm hover:bg-[#d4b06a] transition-colors">Choose File<input type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => handleFileUpload(e, false)} /></label><p className="text-xs text-gray-500 mt-3">Supports JPG, PNG, WEBP, PDF</p></>)}</div>) : (<div className="border border-[#2F2A26] rounded-lg p-4 bg-[#0F0E0D]">{mediaUrl ? (<div className="flex items-center gap-4"><div className="w-16 h-16 rounded-lg overflow-hidden bg-[#191614] flex-shrink-0"><img src={mediaUrl} alt="Selected" className="w-full h-full object-cover" /></div><div className="flex-1 min-w-0"><p className="text-sm text-white font-medium">Image selected from library</p><p className="text-xs text-gray-500 truncate">{mediaUrl}</p></div><button type="button" onClick={() => { setMediaUrl(''); setMediaType('url'); }} className="text-xs text-gray-400 hover:text-red-400 transition-colors flex-shrink-0">Remove</button></div>) : (<button type="button" onClick={() => openMediaPicker('media')} className="w-full py-3 text-sm text-gray-400 hover:text-[#C5A059] transition-colors flex items-center justify-center gap-2"><Images size={16} />Browse Media Library</button>)}</div>)}
+            {mediaType === 'url' ? (<><input type="url" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="https://..." className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none transition-all placeholder-gray-600 text-base" /><p className="text-xs text-gray-500">Paste a direct link to an image or PDF hosted elsewhere.</p></>) : mediaType === 'upload' ? (<div className="border border-dashed border-[#2F2A26] rounded-lg p-6 sm:p-8 flex flex-col items-center justify-center bg-[#0F0E0D] text-gray-400">{mediaUploading ? (<div className="flex flex-col items-center"><Loader2 className="animate-spin text-[#C5A059] mb-2" size={24} /><span className="text-sm">Uploading to Cloudinary...</span></div>) : (<><UploadCloud size={32} className="mb-4 text-gray-500" /><label className="cursor-pointer bg-[#C5A059] text-black px-4 py-2 rounded font-bold text-sm hover:bg-[#d4b06a] transition-colors">Choose File<input type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => handleFileUpload(e, false)} /></label><p className="text-xs text-gray-500 mt-3">Supports JPG, PNG, WEBP, PDF</p></>)}</div>) : (<div className="border border-[#2F2A26] rounded-lg p-4 bg-[#0F0E0D]">{mediaUrl ? (<div className="flex items-center gap-4"><div className="w-16 h-16 rounded-lg overflow-hidden bg-[#191614] flex-shrink-0"><img src={mediaUrl} alt="Selected" className="w-full h-full object-cover" /></div><div className="flex-1 min-w-0"><p className="text-sm text-white font-medium">Image selected from library</p><p className="text-xs text-gray-500 truncate">{mediaUrl}</p></div><button type="button" onClick={() => { setMediaUrl(''); setMediaType('url'); }} className="text-xs text-gray-400 hover:text-red-400 transition-colors flex-shrink-0">Remove</button></div>) : (<button type="button" onClick={() => openMediaPicker('media')} className="w-full py-3 text-sm text-gray-400 hover:text-[#C5A059] transition-colors flex items-center justify-center gap-2"><Images size={16} /> Pick from Media Library</button>)}</div>)}
           </div>
 
           {/* Cover Image */}
@@ -771,7 +946,7 @@ export default function EditPostPage() {
               <button type="button" onClick={() => setCoverImageType('upload')} className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${coverImageType === 'upload' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><UploadCloud size={16} />Upload Image</button>
               <button type="button" onClick={() => { setCoverImageType('library'); openMediaPicker('cover'); }} className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${coverImageType === 'library' ? 'bg-[#C5A059] text-black font-bold' : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'}`}><Images size={16} />Pick from Library</button>
             </div>
-            {coverImageType === 'url' ? (<><input type="url" value={coverImage} onChange={(e) => setCoverImage(e.target.value)} placeholder="https://images.unsplash.com/..." className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none transition-all placeholder-gray-600 text-base" /><p className="text-xs text-gray-500">Paste a direct link for the image to show on the category grids and hover states.</p></>) : coverImageType === 'upload' ? (<div className="border border-dashed border-[#2F2A26] rounded-lg p-6 sm:p-8 flex flex-col items-center justify-center bg-[#0F0E0D] text-gray-400">{coverUploading ? (<div className="flex flex-col items-center"><Loader2 className="animate-spin text-[#C5A059] mb-2" size={24} /><span className="text-sm">Uploading Cover...</span></div>) : (<><ImageIcon size={32} className="mb-4 text-gray-500" /><label className="cursor-pointer bg-[#C5A059] text-black px-4 py-2 rounded font-bold text-sm hover:bg-[#d4b06a] transition-colors">Choose Image<input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, true)} /></label><p className="text-xs text-gray-500 mt-3">Supports JPG, PNG, WEBP</p></>)}</div>) : (<div className="border border-[#2F2A26] rounded-lg p-4 bg-[#0F0E0D]">{coverImage ? (<div className="flex items-center gap-4"><div className="w-16 h-16 rounded-lg overflow-hidden bg-[#191614] flex-shrink-0"><img src={coverImage} alt="Selected cover" className="w-full h-full object-cover" /></div><div className="flex-1 min-w-0"><p className="text-sm text-white font-medium">Cover image selected from library</p><p className="text-xs text-gray-500 truncate">{coverImage}</p></div><button type="button" onClick={() => { setCoverImage(''); setCoverImageType('url'); }} className="text-xs text-gray-400 hover:text-red-400 transition-colors flex-shrink-0">Remove</button></div>) : (<button type="button" onClick={() => openMediaPicker('cover')} className="w-full py-3 text-sm text-gray-400 hover:text-[#C5A059] transition-colors flex items-center justify-center gap-2"><Images size={16} />Browse Media Library</button>)}</div>)}
+            {coverImageType === 'url' ? (<><input type="url" value={coverImage} onChange={(e) => setCoverImage(e.target.value)} placeholder="https://images.unsplash.com/..." className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] outline-none transition-all placeholder-gray-600 text-base" /><p className="text-xs text-gray-500">Paste a direct link for the image to show on the category grids and hover states.</p></>) : coverImageType === 'upload' ? (<div className="border border-dashed border-[#2F2A26] rounded-lg p-6 sm:p-8 flex flex-col items-center justify-center bg-[#0F0E0D] text-gray-400">{coverUploading ? (<div className="flex flex-col items-center"><Loader2 className="animate-spin text-[#C5A059] mb-2" size={24} /><span className="text-sm">Uploading Cover...</span></div>) : (<><ImageIcon size={32} className="mb-4 text-gray-500" /><label className="cursor-pointer bg-[#C5A059] text-black px-4 py-2 rounded font-bold text-sm hover:bg-[#d4b06a] transition-colors">Choose Image<input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, true)} /></label><p className="text-xs text-gray-500 mt-3">Supports JPG, PNG, WEBP</p></>)}</div>) : (<div className="border border-[#2F2A26] rounded-lg p-4 bg-[#0F0E0D]">{coverImage ? (<div className="flex items-center gap-4"><div className="w-16 h-16 rounded-lg overflow-hidden bg-[#191614] flex-shrink-0"><img src={coverImage} alt="Selected cover" className="w-full h-full object-cover" /></div><div className="flex-1 min-w-0"><p className="text-sm text-white font-medium">Cover image selected from library</p><p className="text-xs text-gray-500 truncate">{coverImage}</p></div><button type="button" onClick={() => { setCoverImage(''); setCoverImageType('url'); }} className="text-xs text-gray-400 hover:text-red-400 transition-colors flex-shrink-0">Remove</button></div>) : (<button type="button" onClick={() => openMediaPicker('cover')} className="w-full py-3 text-sm text-gray-400 hover:text-[#C5A059] transition-colors flex items-center justify-center gap-2"><Images size={16} /> Pick from Media Library</button>)}</div>)}
           </div>
 
           {/* Desktop save bar */}
@@ -804,6 +979,10 @@ export default function EditPostPage() {
         onSelect={handleMediaPickerSelect}
         title={mediaPickerTarget === 'cover' ? 'Select Cover Image' : 'Select Media'}
       />
+
+      <ConfirmModal isOpen={importConfirm} title="Replace Content" message="This will replace the current editor content with the imported Google Doc content. Continue?" confirmLabel="Replace" variant="warning" onConfirm={doImport} onCancel={() => setImportConfirm(false)} />
+
+      <ConfirmModal isOpen={pdfImportConfirm} title="Replace Content" message="This will replace the current editor content with the imported PDF content. Continue?" confirmLabel="Replace" variant="warning" onConfirm={doImportPdf} onCancel={() => setPdfImportConfirm(false)} />
     </div>
   );
 }
