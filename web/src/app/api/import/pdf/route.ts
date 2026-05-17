@@ -176,75 +176,6 @@ async function extractImagesFromPdf(pdfBytes: Uint8Array): Promise<ExtractedImag
   return extractedImages;
 }
 
-// ─── OCR text extraction for scanned PDFs ────────────────────────────────────
-
-/**
- * Attempt to extract text from a scanned/image-based PDF using OCR.
- * Renders each page to a canvas image, then runs Tesseract.js on each.
- * Limited to first `maxPages` to avoid timeouts on very large documents.
- */
-async function extractTextViaOcr(
-  pdfBytes: Uint8Array,
-  maxPages: number = 10,
-): Promise<{ text: string; pageCount: number; ocrPages: number }> {
-  // Dynamic imports to avoid bundling issues in edge runtime
-  const pdfjsLib = await import('pdfjs-dist');
-  const { createWorker } = await import('tesseract.js');
-
-  // Point the worker to the bundled ESM worker via CDN (avoids require.resolve in ESM)
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
-
-  const loadingTask = pdfjsLib.getDocument({ data: pdfBytes.slice() });
-  const pdf = await loadingTask.promise;
-  const totalPages = pdf.numPages;
-  const pagesToProcess = Math.min(totalPages, maxPages);
-
-  const worker = await createWorker('eng');
-
-  let fullText = '';
-  let ocrPages = 0;
-
-  try {
-    for (let pageNum = 1; pageNum <= pagesToProcess; pageNum++) {
-      try {
-        const page = await pdf.getPage(pageNum);
-        const scale = 2; // Higher scale = better OCR accuracy
-        const viewport = page.getViewport({ scale });
-
-        // Create an offscreen canvas
-        const canvas = new OffscreenCanvas(viewport.width, viewport.height);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ctx = canvas.getContext('2d') as any;
-        if (!ctx) continue;
-
-        await page.render({
-          canvasContext: ctx,
-          viewport,
-        }).promise;
-
-        // Convert canvas to data URL for Tesseract (accepts string | Blob | Buffer)
-        const blob = await canvas.convertToBlob({ type: 'image/png' });
-        const result = await worker.recognize(blob);
-        const pageText = result.data.text?.trim();
-
-        if (pageText) {
-          if (fullText) fullText += '\n\n';
-          fullText += pageText;
-        }
-        ocrPages++;
-      } catch (pageErr) {
-        console.error(`OCR failed for page ${pageNum}:`, pageErr);
-        // Continue with other pages
-      }
-    }
-  } finally {
-    await worker.terminate();
-  }
-
-  return { text: fullText, pageCount: totalPages, ocrPages };
-}
-
 // ─── Text-to-HTML conversion ─────────────────────────────────────────────────
 
 function textToStructuredHtml(text: string, imagesByPage: Map<number, string[]>): string {
@@ -515,8 +446,6 @@ export async function POST(req: NextRequest) {
     // ── Strategy 1: Try native text extraction (fast, works for digital PDFs) ──
     let parsedText = '';
     let pageCount = 0;
-    let usedOcr = false;
-    let ocrPageCount = 0;
 
     try {
       const pdfParse = (await import('pdf-parse')).default;
@@ -524,91 +453,75 @@ export async function POST(req: NextRequest) {
       parsedText = (parseResult.text || '').trim();
       pageCount = parseResult.numpages || 0;
     } catch {
-      // pdf-parse failed — likely a scanned PDF or corrupted file.
-      // Don't return yet; fall through to OCR attempt.
-      console.warn('pdf-parse failed, will attempt OCR fallback');
+      // pdf-parse threw — file may be corrupted or unusual.
+      // Fall through to return the PDF for client-side handling.
+      console.warn('pdf-parse threw an error');
     }
 
-    // ── Strategy 2: If native extraction yielded no text, try OCR ──
-    if (!parsedText) {
-      try {
-        console.log('Attempting OCR text extraction for scanned PDF...');
-        const ocrResult = await extractTextViaOcr(pdfBytes, 10);
-        parsedText = ocrResult.text.trim();
-        pageCount = ocrResult.pageCount;
-        ocrPageCount = ocrResult.ocrPages;
-        usedOcr = true;
+    // ── If we got text, process normally on the server ──
+    if (parsedText) {
+      // Extract images
+      const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+      const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+      const cloudinaryConfigured = Boolean(
+        cloudName && cloudName !== 'your_cloud_name' && uploadPreset && uploadPreset !== 'unsigned_preset',
+      );
 
-        if (!parsedText) {
-          return NextResponse.json(
-            {
-              error:
-                'Could not extract any text from this PDF. The file may be severely corrupted, password-protected, or contain only images with no recognizable text.',
-            },
-            { status: 400 },
-          );
-        }
-      } catch (ocrErr) {
-        console.error('OCR extraction also failed:', ocrErr);
-        return NextResponse.json(
-          {
-            error:
-              'Could not parse the PDF. The file may be corrupted, password-protected, or in an unsupported format. If it is a scanned document, OCR extraction also failed — try a clearer scan.',
-          },
-          { status: 400 },
-        );
-      }
-    }
+      const imagesByPage: Map<number, string[]> = new Map();
+      let imagesProcessed = 0;
+      let imagesFailed = 0;
 
-    // ── Extract images ──
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-    const cloudinaryConfigured = Boolean(
-      cloudName && cloudName !== 'your_cloud_name' && uploadPreset && uploadPreset !== 'unsigned_preset',
-    );
+      if (cloudinaryConfigured) {
+        try {
+          const extractedImages = await extractImagesFromPdf(pdfBytes);
 
-    const imagesByPage: Map<number, string[]> = new Map();
-    let imagesProcessed = 0;
-    let imagesFailed = 0;
-
-    if (cloudinaryConfigured) {
-      try {
-        const extractedImages = await extractImagesFromPdf(pdfBytes);
-
-        for (const img of extractedImages) {
-          try {
-            const cloudinaryUrl = await uploadImageToCloudinary(
-              img.bytes,
-              img.contentType,
-              `pdf-page${img.pageNumber}-img${img.index}`,
-            );
-            const existing = imagesByPage.get(img.pageNumber) || [];
-            existing.push(cloudinaryUrl);
-            imagesByPage.set(img.pageNumber, existing);
-            imagesProcessed++;
-          } catch (err) {
-            console.error(`Failed to upload PDF image ${img.index}:`, err);
-            imagesFailed++;
+          for (const img of extractedImages) {
+            try {
+              const cloudinaryUrl = await uploadImageToCloudinary(
+                img.bytes,
+                img.contentType,
+                `pdf-page${img.pageNumber}-img${img.index}`,
+              );
+              const existing = imagesByPage.get(img.pageNumber) || [];
+              existing.push(cloudinaryUrl);
+              imagesByPage.set(img.pageNumber, existing);
+              imagesProcessed++;
+            } catch (err) {
+              console.error(`Failed to upload PDF image ${img.index}:`, err);
+              imagesFailed++;
+            }
           }
+        } catch (err) {
+          console.error('PDF image extraction error:', err);
         }
-      } catch (err) {
-        console.error('PDF image extraction error:', err);
       }
+
+      const title = deriveTitle(parsedText, filename);
+      const content = textToStructuredHtml(parsedText, imagesByPage);
+
+      return NextResponse.json({
+        title,
+        content,
+        source: sourceType,
+        imagesProcessed,
+        imagesFailed,
+        pageCount,
+        needsClientOcr: false,
+      });
     }
 
-    // ── Build HTML ──
-    const title = deriveTitle(parsedText, filename);
-    const content = textToStructuredHtml(parsedText, imagesByPage);
+    // ── Strategy 2: No text found — return PDF as base64 for client-side OCR ──
+    // Server-side OCR (tesseract.js) is unreliable in serverless environments
+    // because it needs to download large language model files. The browser is
+    // the right place to do OCR.
+    const pdfBase64 = Buffer.from(pdfBytes).toString('base64');
 
     return NextResponse.json({
-      title,
-      content,
-      source: sourceType,
-      imagesProcessed,
-      imagesFailed,
+      needsClientOcr: true,
+      pdfBase64,
+      filename: filename || 'document.pdf',
       pageCount,
-      usedOcr,
-      ocrPagesProcessed: ocrPageCount,
+      message: 'This PDF appears to be a scanned document or has no embedded text. Client-side OCR is required.',
     });
   } catch (err) {
     console.error('PDF import error:', err);

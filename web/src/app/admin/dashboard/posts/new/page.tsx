@@ -12,6 +12,7 @@ import { Loader2, Save, Image as ImageIcon, Link as LinkIcon, Plus, UploadCloud,
 import RichTextEditor from '@/components/admin/RichTextEditor';
 import ImagePickerModal from '@/components/admin/ImagePickerModal';
 import ConfirmModal from '@/components/admin/ConfirmModal';
+import PdfOcrProcessor from '@/components/admin/PdfOcrProcessor';
 
 const AUTOSAVE_DEBOUNCE_MS = 3000;
 const SAVE_TIMEOUT_MS = 30000;
@@ -50,6 +51,7 @@ export default function CreatePost() {
   const [pdfDriveUrl, setPdfDriveUrl] = useState('');
   const [importingPdf, setImportingPdf] = useState(false);
   const [pdfImportConfirm, setPdfImportConfirm] = useState(false);
+  const [ocrPdfData, setOcrPdfData] = useState<{ pdfBase64: string; filename: string } | null>(null);
   const pdfFileInputRef = useRef<HTMLInputElement>(null);
 
   // Category creation state
@@ -399,6 +401,16 @@ export default function CreatePost() {
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Import failed');
 
+      // If the PDF needs client-side OCR, show the OCR modal
+      if (data.needsClientOcr) {
+        setOcrPdfData({
+          pdfBase64: data.pdfBase64,
+          filename: data.filename || 'document.pdf',
+        });
+        setImportingPdf(false);
+        return;
+      }
+
       if (!title.trim() && data.title) setTitle(data.title);
       setContent(data.content || '');
 
@@ -424,6 +436,21 @@ export default function CreatePost() {
     } finally {
       setImportingPdf(false);
     }
+  };
+
+  const handleOcrExtracted = (text: string) => {
+    if (!title.trim() && ocrPdfData) {
+      // Derive title from first line
+      const firstLine = text.split('\n').map(l => l.trim()).filter(Boolean)[0];
+      if (firstLine && firstLine.length < 120) setTitle(firstLine);
+    }
+    setContent(text);
+    setOcrPdfData(null);
+    showToast('OCR text extracted and loaded into editor.', 'success');
+  };
+
+  const handleOcrCancel = () => {
+    setOcrPdfData(null);
   };
 
   const currentSubCategories = (category && taxonomy && taxonomy[category]) || [];
@@ -697,6 +724,15 @@ export default function CreatePost() {
       <ConfirmModal isOpen={importConfirm} title="Replace Content" message="This will replace the current editor content with the imported Google Doc content. Continue?" confirmLabel="Replace" variant="warning" onConfirm={doImportGoogleDocs} onCancel={() => setImportConfirm(false)} />
 
       <ConfirmModal isOpen={pdfImportConfirm} title="Replace Content" message="This will replace the current editor content with the imported PDF content. Continue?" confirmLabel="Replace" variant="warning" onConfirm={doImportPdf} onCancel={() => setPdfImportConfirm(false)} />
+
+      {ocrPdfData && (
+        <PdfOcrProcessor
+          pdfBase64={ocrPdfData.pdfBase64}
+          filename={ocrPdfData.filename}
+          onExtracted={handleOcrExtracted}
+          onCancel={handleOcrCancel}
+        />
+      )}
     </div>
   );
 }
