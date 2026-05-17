@@ -13,6 +13,7 @@ import RichTextEditor from '@/components/admin/RichTextEditor';
 import ImagePickerModal from '@/components/admin/ImagePickerModal';
 import ConfirmModal from '@/components/admin/ConfirmModal';
 import PdfOcrProcessor from '@/components/admin/PdfOcrProcessor';
+import { textToStructuredHtml } from '@/lib/textToHtml';
 
 const AUTOSAVE_DEBOUNCE_MS = 3000;
 const SAVE_TIMEOUT_MS = 30000;
@@ -444,7 +445,9 @@ export default function CreatePost() {
       const firstLine = text.split('\n').map(l => l.trim()).filter(Boolean)[0];
       if (firstLine && firstLine.length < 120) setTitle(firstLine);
     }
-    setContent(text);
+    // Convert raw OCR text to structured HTML (headings, paragraphs, lists)
+    const html = textToStructuredHtml(text);
+    setContent(html);
     setOcrPdfData(null);
     showToast('OCR text extracted and loaded into editor.', 'success');
   };

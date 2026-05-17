@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument } from 'pdf-lib';
+import { textToStructuredHtml, deriveTitle } from '@/lib/textToHtml';
 
 // ─── Cloudinary upload ───────────────────────────────────────────────────────
 
@@ -178,149 +179,6 @@ async function extractImagesFromPdf(pdfBytes: Uint8Array): Promise<ExtractedImag
 
 // ─── Text-to-HTML conversion ─────────────────────────────────────────────────
 
-function textToStructuredHtml(text: string, imagesByPage: Map<number, string[]>): string {
-  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const lines = normalized.split('\n');
-
-  const htmlParts: string[] = [];
-  let inList = false;
-  let listType: 'ul' | 'ol' = 'ul';
-
-  const isHeading = (line: string, nextLine: string): { level: number } | null => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.length > 120) return null;
-
-    if (trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed) && trimmed.length > 2) {
-      return { level: 2 };
-    }
-    if (nextLine && /^[-=]{3,}$/.test(nextLine.trim())) {
-      return { level: nextLine.trim().startsWith('=') ? 1 : 2 };
-    }
-    if (
-      trimmed.length < 80 &&
-      !trimmed.endsWith('.') &&
-      !trimmed.endsWith(',') &&
-      !trimmed.endsWith(';') &&
-      !trimmed.endsWith(':') &&
-      !trimmed.endsWith('!') &&
-      !trimmed.endsWith('?') &&
-      !/^\d+[.\)]/.test(trimmed) &&
-      !/^[-•*–]/.test(trimmed)
-    ) {
-      return { level: 2 };
-    }
-    return null;
-  };
-
-  const isListItem = (line: string): { type: 'ul' | 'ol'; content: string } | null => {
-    const trimmed = line.trim();
-    const orderedMatch = trimmed.match(/^(\d+)[.\)]\s+(.+)$/);
-    if (orderedMatch) return { type: 'ol', content: orderedMatch[2] };
-    const unorderedMatch = trimmed.match(/^[-•*–]\s+(.+)$/);
-    if (unorderedMatch) return { type: 'ul', content: unorderedMatch[1] };
-    return null;
-  };
-
-  const allImagePages = Array.from(imagesByPage.keys()).sort((a, b) => a - b);
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-    const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
-
-    if (!trimmed) {
-      if (inList) {
-        htmlParts.push(listType === 'ul' ? '</ul>' : '</ol>');
-        inList = false;
-      }
-      continue;
-    }
-
-    const listItem = isListItem(trimmed);
-    if (listItem) {
-      if (!inList || listType !== listItem.type) {
-        if (inList) htmlParts.push(listType === 'ul' ? '</ul>' : '</ol>');
-        htmlParts.push(listItem.type === 'ul' ? '<ul>' : '<ol>');
-        inList = true;
-        listType = listItem.type;
-      }
-      htmlParts.push(`<li>${escapeHtml(listItem.content)}</li>`);
-      continue;
-    }
-
-    if (inList) {
-      htmlParts.push(listType === 'ul' ? '</ul>' : '</ol>');
-      inList = false;
-    }
-
-    const heading = isHeading(trimmed, nextLine);
-    if (heading) {
-      const tag = `h${Math.min(heading.level, 3)}`;
-      htmlParts.push(`<${tag}>${escapeHtml(trimmed)}</${tag}>`);
-      if (nextLine && /^[-=]{3,}$/.test(nextLine.trim())) i++;
-      continue;
-    }
-
-    if (trimmed.length < 60 && !trimmed.endsWith('.') && !trimmed.endsWith('!') && !trimmed.endsWith('?')) {
-      htmlParts.push(`<h3>${escapeHtml(trimmed)}</h3>`);
-    } else {
-      htmlParts.push(`<p>${escapeHtml(trimmed)}</p>`);
-    }
-  }
-
-  if (inList) {
-    htmlParts.push(listType === 'ul' ? '</ul>' : '</ol>');
-  }
-
-  if (imagesByPage.size === 0) {
-    return htmlParts.join('\n');
-  }
-
-  const maxPage = Math.max(...allImagePages, 1);
-  const result: string[] = [];
-  const insertedPages = new Set<number>();
-
-  for (let i = 0; i < htmlParts.length; i++) {
-    for (const pageNum of allImagePages) {
-      if (insertedPages.has(pageNum)) continue;
-      const targetRatio = (pageNum - 0.5) / maxPage;
-      const targetIndex = Math.floor(targetRatio * htmlParts.length);
-      if (i >= targetIndex) {
-        const urls = imagesByPage.get(pageNum) || [];
-        for (const url of urls) {
-          result.push(
-            `<img src="${url}" alt="Image from page ${pageNum}" style="max-width:100%;height:auto;margin:1.5em auto;display:block;" />`,
-          );
-        }
-        insertedPages.add(pageNum);
-      }
-    }
-    result.push(htmlParts[i]);
-  }
-
-  for (const pageNum of allImagePages) {
-    if (!insertedPages.has(pageNum)) {
-      const urls = imagesByPage.get(pageNum) || [];
-      for (const url of urls) {
-        result.push(
-          `<img src="${url}" alt="Image from page ${pageNum}" style="max-width:100%;height:auto;margin:1.5em auto;display:block;" />`,
-        );
-      }
-    }
-  }
-
-  return result.join('\n');
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
-    .replace(/'/g, '&#039;');
-}
-
 // ─── Google Drive link resolution ────────────────────────────────────────────
 
 function extractGoogleDriveFileId(input: string): string | null {
@@ -371,20 +229,6 @@ async function downloadFromGoogleDrive(fileId: string): Promise<Uint8Array> {
 
   const arrayBuffer = await response.arrayBuffer();
   return new Uint8Array(arrayBuffer);
-}
-
-// ─── Title derivation ────────────────────────────────────────────────────────
-
-function deriveTitle(text: string, filename?: string): string {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  if (lines.length > 0) {
-    const firstLine = lines[0];
-    if (firstLine.length < 120) return firstLine;
-  }
-  if (filename) {
-    return filename.replace(/\.pdf$/i, '').replace(/[_-]/g, ' ');
-  }
-  return 'Imported PDF';
 }
 
 // ─── Route handler ───────────────────────────────────────────────────────────
@@ -497,7 +341,20 @@ export async function POST(req: NextRequest) {
       }
 
       const title = deriveTitle(parsedText, filename);
-      const content = textToStructuredHtml(parsedText, imagesByPage);
+      let content = textToStructuredHtml(parsedText);
+
+      // Append extracted images at the end of the content
+      if (imagesByPage.size > 0) {
+        const allImages: string[] = [];
+        for (const [pageNum, urls] of imagesByPage) {
+          for (const url of urls) {
+            allImages.push(
+              `<img src="${url}" alt="Image from page ${pageNum}" style="max-width:100%;height:auto;margin:1.5em auto;display:block;" />`,
+            );
+          }
+        }
+        content += '\n\n' + allImages.join('\n');
+      }
 
       return NextResponse.json({
         title,
