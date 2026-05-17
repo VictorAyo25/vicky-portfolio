@@ -651,17 +651,28 @@ export default function EditPostPage() {
     }
   };
 
-  const handleOcrExtracted = (text: string, links: ExtractedLink[]) => {
+  const handleOcrExtracted = (text: string, links: ExtractedLink[], imageUrls: string[]) => {
     if (!title.trim() && ocrPdfData) {
       const firstLine = text.split('\n').map(l => l.trim()).filter(Boolean)[0];
       if (firstLine && firstLine.length < 120) setTitle(firstLine);
     }
     // Convert raw OCR text to structured HTML (headings, paragraphs, lists)
-    const html = textToStructuredHtml(text);
+    let html = textToStructuredHtml(text);
+
+    // Append extracted page images at the end of the content
+    if (imageUrls.length > 0) {
+      const imageHtml = imageUrls
+        .map((url, i) => `<img src="${url}" alt="Page ${i + 1}" style="max-width:100%;height:auto;margin:1.5em auto;display:block;" />`)
+        .join('\n');
+      html += '\n\n' + imageHtml;
+    }
+
     setContent(html);
     setOcrPdfData(null);
-    const linkMsg = links.length > 0 ? ` ${links.length} link(s) found — add them manually from the preview above.` : '';
-    showToast(`Text extracted and loaded into editor.${linkMsg}`, 'success');
+    const parts = [`Text extracted and loaded into editor`];
+    if (links.length > 0) parts.push(`${links.length} link(s) found — add them manually`);
+    if (imageUrls.length > 0) parts.push(`${imageUrls.length} page image(s) extracted`);
+    showToast(parts.join('. '), 'success');
   };
 
   const handleOcrCancel = () => {

@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Loader2, FileText, AlertCircle, CheckCircle, Link } from 'lucide-react';
+import { Loader2, FileText, AlertCircle, CheckCircle, Link, Image } from 'lucide-react';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 
 interface PdfOcrProcessorProps {
   pdfBase64: string;
   filename: string;
-  onExtracted: (text: string, links: ExtractedLink[]) => void;
+  onExtracted: (text: string, links: ExtractedLink[], imageUrls: string[]) => void;
   onCancel: () => void;
 }
 
@@ -120,11 +121,12 @@ async function ocrPage(worker: any, page: any, scale: number): Promise<string> {
 }
 
 export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCancel }: PdfOcrProcessorProps) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'extracting' | 'ocr-fallback' | 'done' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'extracting' | 'ocr-fallback' | 'uploading-images' | 'done' | 'error'>('idle');
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [errorMsg, setErrorMsg] = useState('');
   const [extractedText, setExtractedText] = useState('');
   const [extractedLinks, setExtractedLinks] = useState<ExtractedLink[]>([]);
+  const [extractedImages, setExtractedImages] = useState<string[]>([]);
   const [pagesWithText, setPagesWithText] = useState(0);
   const [pagesWithOcr, setPagesWithOcr] = useState(0);
 
@@ -213,6 +215,41 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
       setExtractedLinks(allLinks);
       setPagesWithText(textPageCount);
       setPagesWithOcr(ocrPageCount);
+
+      // ── Extract page images and upload to Cloudinary ──
+      setStatus('uploading-images');
+      const imageUrls: string[] = [];
+
+      try {
+        for (let pageNum = 1; pageNum <= pagesToProcess; pageNum++) {
+          try {
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+
+            await page.render({ canvasContext: ctx, viewport }).promise;
+
+            // Convert canvas to blob, then to File for upload
+            const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+            if (!blob) continue;
+
+            const file = new File([blob], `pdf-page-${pageNum}.jpg`, { type: 'image/jpeg' });
+            const result = await uploadToCloudinary(file);
+            imageUrls.push(result.url);
+          } catch (imgErr) {
+            console.error(`Failed to extract image from page ${pageNum}:`, imgErr);
+          }
+        }
+      } catch (cloudErr) {
+        console.error('Image upload failed:', cloudErr);
+        // Continue without images — text is still usable
+      }
+
+      setExtractedImages(imageUrls);
       setStatus('done');
     } catch (err) {
       console.error('PDF extraction error:', err);
@@ -222,7 +259,7 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
   }, [pdfBase64]);
 
   const handleUseText = () => {
-    onExtracted(extractedText, extractedLinks);
+    onExtracted(extractedText, extractedLinks, extractedImages);
   };
 
   return (
@@ -264,7 +301,7 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
           </>
         )}
 
-        {(status === 'loading' || status === 'extracting' || status === 'ocr-fallback') && (
+        {(status === 'loading' || status === 'extracting' || status === 'ocr-fallback' || status === 'uploading-images') && (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
@@ -272,6 +309,7 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
                 {status === 'loading' && 'Loading PDF in browser...'}
                 {status === 'extracting' && `Extracting text... Page ${progress.current} of ${progress.total}`}
                 {status === 'ocr-fallback' && `Running OCR for scanned pages... Page ${progress.current} of ${progress.total}`}
+                {status === 'uploading-images' && `Extracting page images & uploading to Cloudinary...`}
               </span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -317,6 +355,27 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
                         <li className="text-xs text-gray-400">...and {extractedLinks.length - 10} more</li>
                       )}
                     </ul>
+                  </div>
+                </div>
+              )}
+              {extractedImages.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <Image className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-purple-700 dark:text-purple-300">
+                      {extractedImages.length} page image(s) extracted & uploaded to Cloudinary.
+                    </p>
+                    <div className="mt-2 grid grid-cols-3 gap-1.5 max-h-32 overflow-y-auto">
+                      {extractedImages.map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block">
+                          <img
+                            src={url.replace('/upload/', '/upload/w_150,h_150,c_fill/')}
+                            alt={`Page ${i + 1}`}
+                            className="w-full h-16 object-cover rounded border border-gray-200 dark:border-gray-700 hover:opacity-80 transition-opacity"
+                          />
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
