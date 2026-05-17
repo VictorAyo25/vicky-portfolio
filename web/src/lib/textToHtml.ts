@@ -1,6 +1,7 @@
 /**
  * Convert raw text into structured HTML.
  * Detects headings, paragraphs, lists, and preserves basic formatting.
+ * Handles markdown-style markers: **bold**, *italic*, ***bold+italic***, [text](url)
  * Used by both server-side PDF import and client-side OCR processing.
  */
 
@@ -13,6 +14,45 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;');
 }
 
+/**
+ * Convert markdown-style inline formatting to HTML tags.
+ * Processes: ***bold+italic*** → <strong><em>...</em></strong>
+ *            **bold** → <strong>...</strong>
+ *            *italic* → <em>...</em>
+ *            [text](url) → <a href="url">text</a>
+ */
+function convertInlineFormatting(text: string): string {
+  // Escape HTML first (but preserve our markdown markers)
+  let result = escapeHtml(text);
+
+  // Links: [text](url) → <a href="url">text</a>
+  // Must be processed before bold/italic to avoid conflicts
+  result = result.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">$1</a>',
+  );
+
+  // Bold+italic: ***text*** → <strong><em>text</em></strong>
+  result = result.replace(
+    /\*\*\*(.+?)\*\*\*/g,
+    '<strong><em>$1</em></strong>',
+  );
+
+  // Bold: **text** → <strong>text</strong>
+  result = result.replace(
+    /\*\*(.+?)\*\*/g,
+    '<strong>$1</strong>',
+  );
+
+  // Italic: *text* → <em>text</em>
+  result = result.replace(
+    /\*(.+?)\*/g,
+    '<em>$1</em>',
+  );
+
+  return result;
+}
+
 export function textToStructuredHtml(text: string): string {
   const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const lines = normalized.split('\n');
@@ -22,11 +62,12 @@ export function textToStructuredHtml(text: string): string {
   let listType: 'ul' | 'ol' = 'ul';
 
   const isHeading = (line: string, nextLine: string): { level: number } | null => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.length > 120) return null;
+    // Strip markdown markers for heading detection
+    const stripped = line.replace(/\*{1,3}|_/g, '').trim();
+    if (!stripped || stripped.length > 120) return null;
 
     // ALL CAPS line → heading level 2
-    if (trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed) && trimmed.length > 2) {
+    if (stripped === stripped.toUpperCase() && /[A-Z]/.test(stripped) && stripped.length > 2) {
       return { level: 2 };
     }
     // Line followed by === or --- underline → heading
@@ -35,15 +76,15 @@ export function textToStructuredHtml(text: string): string {
     }
     // Short line that doesn't end with sentence punctuation → heading
     if (
-      trimmed.length < 80 &&
-      !trimmed.endsWith('.') &&
-      !trimmed.endsWith(',') &&
-      !trimmed.endsWith(';') &&
-      !trimmed.endsWith(':') &&
-      !trimmed.endsWith('!') &&
-      !trimmed.endsWith('?') &&
-      !/^\d+[.\)]/.test(trimmed) &&
-      !/^[-•*–]/.test(trimmed)
+      stripped.length < 80 &&
+      !stripped.endsWith('.') &&
+      !stripped.endsWith(',') &&
+      !stripped.endsWith(';') &&
+      !stripped.endsWith(':') &&
+      !stripped.endsWith('!') &&
+      !stripped.endsWith('?') &&
+      !/^\d+[.\)]/.test(stripped) &&
+      !/^[-•*–]/.test(stripped)
     ) {
       return { level: 2 };
     }
@@ -82,7 +123,7 @@ export function textToStructuredHtml(text: string): string {
         inList = true;
         listType = listItem.type;
       }
-      htmlParts.push(`<li>${escapeHtml(listItem.content)}</li>`);
+      htmlParts.push(`<li>${convertInlineFormatting(listItem.content)}</li>`);
       continue;
     }
 
@@ -96,17 +137,18 @@ export function textToStructuredHtml(text: string): string {
     const heading = isHeading(trimmed, nextLine);
     if (heading) {
       const tag = `h${Math.min(heading.level, 3)}`;
-      htmlParts.push(`<${tag}>${escapeHtml(trimmed)}</${tag}>`);
+      htmlParts.push(`<${tag}>${convertInlineFormatting(trimmed)}</${tag}>`);
       if (nextLine && /^[-=]{3,}$/.test(nextLine.trim())) i++; // skip underline
       continue;
     }
 
     // Short line without sentence ending → h3
-    if (trimmed.length < 60 && !trimmed.endsWith('.') && !trimmed.endsWith('!') && !trimmed.endsWith('?')) {
-      htmlParts.push(`<h3>${escapeHtml(trimmed)}</h3>`);
+    const strippedForHeading = trimmed.replace(/\*{1,3}|_/g, '').trim();
+    if (strippedForHeading.length < 60 && !strippedForHeading.endsWith('.') && !strippedForHeading.endsWith('!') && !strippedForHeading.endsWith('?')) {
+      htmlParts.push(`<h3>${convertInlineFormatting(trimmed)}</h3>`);
     } else {
-      // Regular paragraph
-      htmlParts.push(`<p>${escapeHtml(trimmed)}</p>`);
+      // Regular paragraph with inline formatting
+      htmlParts.push(`<p>${convertInlineFormatting(trimmed)}</p>`);
     }
   }
 
