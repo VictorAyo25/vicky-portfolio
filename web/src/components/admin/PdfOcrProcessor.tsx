@@ -1,132 +1,95 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Loader2, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { Loader2, FileText, AlertCircle, CheckCircle, Link } from 'lucide-react';
 
 interface PdfOcrProcessorProps {
   pdfBase64: string;
   filename: string;
-  onExtracted: (text: string) => void;
+  onExtracted: (text: string, links: ExtractedLink[]) => void;
   onCancel: () => void;
 }
 
-interface TextItem {
-  str: string;
-  fontName: string;
-  hasEOL: boolean;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface LinkAnnotation {
+export interface ExtractedLink {
   url: string;
-  rect: [number, number, number, number];
   page: number;
 }
 
 /**
- * Extract text with formatting hints from a PDF page using pdfjs-dist's getTextContent.
- * Returns structured text with **bold**, *italic*, and [link](url) markers.
+ * Extract text from a PDF page using pdfjs-dist's getTextContent.
+ * Items are returned in reading order by pdfjs-dist.
+ * We detect line breaks by tracking Y-position changes.
  */
-async function extractTextWithFormatting(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  page: any,
-  pageNum: number,
-  annotations: LinkAnnotation[],
-): Promise<string> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function extractTextFromPage(page: any): Promise<string> {
   const textContent = await page.getTextContent();
-  const items: TextItem[] = textContent.items as TextItem[];
+  const items = textContent.items as Array<{
+    str: string;
+    transform: number[];
+    hasEOL: boolean;
+  }>;
 
   if (items.length === 0) return '';
 
-  // Group items into lines based on Y position
-  const lineTolerance = 2;
-  const lines: TextItem[][] = [];
-  let currentLine: TextItem[] = [];
-  let lastY = -9999;
-
-  const sortedItems = [...items].sort((a, b) => {
-    if (Math.abs(a.y - b.y) > lineTolerance) return b.y - a.y; // top to bottom
-    return a.x - b.x; // left to right
-  });
+  // pdfjs-dist returns items in reading order.
+  // We detect line breaks by checking Y-position (transform[5]) changes.
+  const lines: string[] = [];
+  let currentLine = '';
+  let lastY: number | null = null;
+  const lineBreakThreshold = 5; // pixels
 
   for (const item of items) {
-    const y = item.y;
-    if (Math.abs(y - lastY) > lineTolerance && currentLine.length > 0) {
-      lines.push(currentLine);
-      currentLine = [];
+    const str = item.str;
+    if (!str) continue;
+
+    // transform[5] is the Y position
+    const y = item.transform?.[5] ?? 0;
+
+    // Detect new line: Y position changed significantly
+    if (lastY !== null && Math.abs(y - lastY) > lineBreakThreshold) {
+      if (currentLine.trim()) {
+        lines.push(currentLine.trim());
+      }
+      currentLine = '';
     }
-    currentLine.push(item);
-    lastY = y;
-  }
-  if (currentLine.length > 0) lines.push(currentLine);
 
-  // Process each line into formatted text
-  const formattedLines: string[] = [];
-
-  for (const line of lines) {
-    // Sort items in line left to right
-    line.sort((a, b) => a.x - b.x);
-
-    let lineText = '';
-    for (const item of line) {
-      const str = item.str;
-      if (!str.trim()) continue;
-
-      // Detect formatting from font name
-      const font = (item.fontName || '').toLowerCase();
-      const isBold = font.includes('bold') || font.includes('heavy') || font.includes('black') || font.includes('demi');
-      const isItalic = font.includes('italic') || font.includes('oblique') || font.includes('slanted');
-
-      // Check if this text overlaps with a hyperlink annotation
-      const link = annotations.find((a) => {
-        if (a.page !== pageNum) return false;
-        const [x1, y1, x2, y2] = a.rect;
-        return item.x >= x1 - 2 && item.x + item.width <= x2 + 2 && item.y >= y1 - 2 && item.y + item.height <= y2 + 2;
-      });
-
-      let formatted = str;
-      if (link) {
-        formatted = `[${str}](${link.url})`;
-      } else {
-        if (isBold && isItalic) {
-          formatted = `***${str}***`;
-        } else if (isBold) {
-          formatted = `**${str}**`;
-        } else if (isItalic) {
-          formatted = `*${str}*`;
+    // Add space between items on same line if there's a gap
+    if (currentLine && !currentLine.endsWith(' ') && !str.startsWith(' ')) {
+      const x = item.transform?.[4] ?? 0;
+      const prevItem = items[items.indexOf(item) - 1];
+      if (prevItem) {
+        const prevX = prevItem.transform?.[4] ?? 0;
+        const prevWidth = (prevItem.str?.length ?? 0) * 6; // rough estimate
+        if (x - (prevX + prevWidth) > 3) {
+          currentLine += ' ';
         }
       }
-
-      lineText += formatted;
     }
 
-    if (lineText.trim()) {
-      formattedLines.push(lineText);
-    }
+    currentLine += str;
+    lastY = y;
   }
 
-  return formattedLines.join('\n');
+  // Don't forget the last line
+  if (currentLine.trim()) {
+    lines.push(currentLine.trim());
+  }
+
+  return lines.join('\n');
 }
 
 /**
  * Extract link annotations from a PDF page.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function extractLinks(page: any, pageNum: number): Promise<LinkAnnotation[]> {
+async function extractLinksFromPage(page: any, pageNum: number): Promise<ExtractedLink[]> {
   try {
     const annots = await page.getAnnotations();
-    const links: LinkAnnotation[] = [];
+    const links: ExtractedLink[] = [];
 
     for (const annot of annots) {
       if (annot.subtype === 'Link' && annot.url) {
-        links.push({
-          url: annot.url,
-          rect: annot.rect as [number, number, number, number],
-          page: pageNum,
-        });
+        links.push({ url: annot.url, page: pageNum });
       }
     }
 
@@ -137,7 +100,7 @@ async function extractLinks(page: any, pageNum: number): Promise<LinkAnnotation[
 }
 
 /**
- * Run Tesseract OCR on a page image as fallback.
+ * Run Tesseract OCR on a page image as fallback for scanned pages.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function ocrPage(worker: any, page: any, scale: number): Promise<string> {
@@ -161,7 +124,9 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [errorMsg, setErrorMsg] = useState('');
   const [extractedText, setExtractedText] = useState('');
-  const [method, setMethod] = useState<'text' | 'ocr'>('text');
+  const [extractedLinks, setExtractedLinks] = useState<ExtractedLink[]>([]);
+  const [pagesWithText, setPagesWithText] = useState(0);
+  const [pagesWithOcr, setPagesWithOcr] = useState(0);
 
   const runExtraction = useCallback(async () => {
     setStatus('loading');
@@ -191,8 +156,11 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
       setStatus('extracting');
 
       let fullText = '';
-      let usedOcr = false;
-      let worker: ReturnType<typeof createWorker> extends Promise<infer T> ? T : never = null as never;
+      const allLinks: ExtractedLink[] = [];
+      let textPageCount = 0;
+      let ocrPageCount = 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let worker: any = null;
 
       for (let pageNum = 1; pageNum <= pagesToProcess; pageNum++) {
         setProgress({ current: pageNum, total: pagesToProcess });
@@ -200,29 +168,31 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
         try {
           const page = await pdf.getPage(pageNum);
 
-          // Strategy 1: Try getTextContent (preserves bold/italic/links from PDF structure)
-          const links = await extractLinks(page, pageNum);
-          const text = await extractTextWithFormatting(page, pageNum, links);
+          // Extract links first (works regardless of text layer)
+          const links = await extractLinksFromPage(page, pageNum);
+          allLinks.push(...links);
+
+          // Strategy 1: Try getTextContent (works for PDFs with any text layer)
+          const text = await extractTextFromPage(page);
 
           if (text.trim()) {
             if (fullText) fullText += '\n\n';
             fullText += text;
+            textPageCount++;
             continue;
           }
 
-          // Strategy 2: Fallback to Tesseract OCR for this page
-          if (!usedOcr) {
-            usedOcr = true;
-            setStatus('ocr-fallback');
+          // Strategy 2: Fallback to Tesseract OCR for fully scanned pages
+          if (!worker) {
             worker = await createWorker('eng');
+            setStatus('ocr-fallback');
           }
 
-          if (worker) {
-            const ocrText = await ocrPage(worker, page, 2);
-            if (ocrText) {
-              if (fullText) fullText += '\n\n';
-              fullText += ocrText;
-            }
+          const ocrText = await ocrPage(worker, page, 2);
+          if (ocrText) {
+            if (fullText) fullText += '\n\n';
+            fullText += ocrText;
+            ocrPageCount++;
           }
         } catch (pageErr) {
           console.error(`Failed to process page ${pageNum}:`, pageErr);
@@ -239,8 +209,10 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
         return;
       }
 
-      setMethod(usedOcr ? 'ocr' : 'text');
       setExtractedText(fullText);
+      setExtractedLinks(allLinks);
+      setPagesWithText(textPageCount);
+      setPagesWithOcr(ocrPageCount);
       setStatus('done');
     } catch (err) {
       console.error('PDF extraction error:', err);
@@ -250,7 +222,7 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
   }, [pdfBase64]);
 
   const handleUseText = () => {
-    onExtracted(extractedText);
+    onExtracted(extractedText, extractedLinks);
   };
 
   return (
@@ -269,11 +241,11 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
         {status === 'idle' && (
           <>
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              This PDF has no embedded text layer. We'll extract text using your browser,
-              preserving <strong>bold</strong>, <em>italic</em>, and <span className="text-blue-500 underline">hyperlinks</span> where possible.
+              This PDF has no embedded text layer. We'll extract the text using your browser.
+              Hyperlinks found in the PDF will be listed separately so you can add them manually.
             </p>
             <p className="text-xs text-amber-600 dark:text-amber-400">
-              Processing happens locally in your browser. Large documents may take a minute.
+              Processing happens locally. Large documents may take a minute.
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -298,8 +270,8 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
               <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
               <span className="text-sm text-gray-700 dark:text-gray-300">
                 {status === 'loading' && 'Loading PDF in browser...'}
-                {status === 'extracting' && `Extracting text with formatting... Page ${progress.current} of ${progress.total}`}
-                {status === 'ocr-fallback' && `Running OCR fallback for scanned pages... Page ${progress.current} of ${progress.total}`}
+                {status === 'extracting' && `Extracting text... Page ${progress.current} of ${progress.total}`}
+                {status === 'ocr-fallback' && `Running OCR for scanned pages... Page ${progress.current} of ${progress.total}`}
               </span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -316,20 +288,43 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
 
         {status === 'done' && (
           <>
-            <div className="flex items-start gap-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-              <CheckCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-              <div>
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <CheckCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
                 <p className="text-sm text-green-700 dark:text-green-300">
-                  ✓ Text extracted from {progress.total} page(s).
-                  {method === 'text' && ' Formatting and links preserved.'}
-                  {method === 'ocr' && ' Some pages required OCR fallback (formatting may be limited).'}
+                  Text extracted from {progress.total} page(s).
+                  {pagesWithText > 0 && ` ${pagesWithText} with text layer.`}
+                  {pagesWithOcr > 0 && ` ${pagesWithOcr} via OCR.`}
                 </p>
               </div>
+              {extractedLinks.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <Link className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      {extractedLinks.length} hyperlink(s) found:
+                    </p>
+                    <ul className="mt-1 space-y-1 max-h-24 overflow-y-auto">
+                      {extractedLinks.slice(0, 10).map((link, i) => (
+                        <li key={i} className="text-xs text-blue-600 dark:text-blue-400 truncate">
+                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="underline">
+                            {link.url}
+                          </a>
+                          <span className="text-gray-400 ml-1">(p.{link.page})</span>
+                        </li>
+                      ))}
+                      {extractedLinks.length > 10 && (
+                        <li className="text-xs text-gray-400">...and {extractedLinks.length - 10} more</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="max-h-48 overflow-y-auto bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium">Preview (markdown formatting):</p>
-              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">
-                {extractedText.slice(0, 600)}{extractedText.length > 600 ? '...' : ''}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium">Extracted text preview:</p>
+              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                {extractedText.slice(0, 500)}{extractedText.length > 500 ? '...' : ''}
               </p>
             </div>
             <div className="flex gap-3 justify-end">

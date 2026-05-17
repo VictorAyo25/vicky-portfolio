@@ -12,7 +12,7 @@ import { Loader2, Save, Image as ImageIcon, Link as LinkIcon, Plus, UploadCloud,
 import RichTextEditor from '@/components/admin/RichTextEditor';
 import ImagePickerModal from '@/components/admin/ImagePickerModal';
 import ConfirmModal from '@/components/admin/ConfirmModal';
-import PdfOcrProcessor from '@/components/admin/PdfOcrProcessor';
+import PdfOcrProcessor, { type ExtractedLink } from '@/components/admin/PdfOcrProcessor';
 import { textToStructuredHtml } from '@/lib/textToHtml';
 
 const AUTOSAVE_DEBOUNCE_MS = 3000;
@@ -439,7 +439,7 @@ export default function CreatePost() {
     }
   };
 
-  const handleOcrExtracted = (text: string) => {
+  const handleOcrExtracted = (text: string, links: ExtractedLink[]) => {
     if (!title.trim() && ocrPdfData) {
       // Derive title from first line
       const firstLine = text.split('\n').map(l => l.trim()).filter(Boolean)[0];
@@ -449,7 +449,8 @@ export default function CreatePost() {
     const html = textToStructuredHtml(text);
     setContent(html);
     setOcrPdfData(null);
-    showToast('OCR text extracted and loaded into editor.', 'success');
+    const linkMsg = links.length > 0 ? ` ${links.length} link(s) found — add them manually from the preview above.` : '';
+    showToast(`Text extracted and loaded into editor.${linkMsg}`, 'success');
   };
 
   const handleOcrCancel = () => {
