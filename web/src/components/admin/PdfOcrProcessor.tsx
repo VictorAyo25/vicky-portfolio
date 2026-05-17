@@ -1,18 +1,150 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Loader2, FileText, AlertCircle, CheckCircle, Link } from 'lucide-react';
+import { Loader2, FileText, AlertCircle, CheckCircle, Link, Image } from 'lucide-react';
+import { PDFDocument } from 'pdf-lib';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 
 interface PdfOcrProcessorProps {
   pdfBase64: string;
   filename: string;
-  onExtracted: (text: string, links: ExtractedLink[]) => void;
+  onExtracted: (text: string, links: ExtractedLink[], imageUrls: string[]) => void;
   onCancel: () => void;
 }
 
 export interface ExtractedLink {
   url: string;
   page: number;
+}
+
+interface EmbeddedImage {
+  bytes: Uint8Array;
+  contentType: string;
+  pageNumber: number;
+}
+
+/**
+ * Extract embedded images from a PDF using pdf-lib.
+ * Same logic as the server-side import route.
+ */
+async function extractEmbeddedImages(pdfBytes: Uint8Array): Promise<EmbeddedImage[]> {
+  const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const extracted: EmbeddedImage[] = [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfDocAny = pdfDoc as any;
+
+  for (let pageIdx = 0; pageIdx < pdfDoc.getPageCount(); pageIdx++) {
+    try {
+      const page = pdfDoc.getPage(pageIdx);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pageAny = page as any;
+      const pageNode = pageAny.node?.();
+      if (!pageNode) continue;
+
+      const resources = pageNode.Resources?.();
+      if (!resources) continue;
+
+      const xObjects = resources.XObject?.();
+      if (!xObjects) continue;
+
+      const xObjectKeys = Object.keys(xObjects);
+
+      for (const key of xObjectKeys) {
+        try {
+          const xObject = xObjects[key];
+          if (!xObject) continue;
+
+          const xObjDict = xObject.dict || xObject;
+          const subtype = xObjDict.Subtype?.() || xObjDict.Subtype;
+
+          if (subtype && String(subtype) === 'Image') {
+            let imageBytes: Uint8Array | null = null;
+            let contentType = 'image/png';
+
+            const filter = xObjDict.Filter?.() || xObjDict.Filter;
+            const filterStr = filter ? String(filter) : '';
+
+            if (filterStr.includes('DCT')) {
+              contentType = 'image/jpeg';
+              imageBytes = xObjDict.getContents?.() || null;
+            } else if (filterStr.includes('FlateDecode') || !filterStr) {
+              imageBytes = xObjDict.getContents?.() || null;
+              contentType = 'image/png';
+            } else {
+              imageBytes = xObjDict.getContents?.() || null;
+            }
+
+            if (imageBytes && imageBytes.length > 100) {
+              const isJpeg = imageBytes[0] === 0xFF && imageBytes[1] === 0xD8;
+              const isPng = imageBytes[0] === 0x89 && imageBytes[1] === 0x50 &&
+                            imageBytes[2] === 0x4E && imageBytes[3] === 0x47;
+
+              if (isJpeg || isPng || imageBytes.length > 500) {
+                extracted.push({
+                  bytes: imageBytes,
+                  contentType: isJpeg ? 'image/jpeg' : contentType,
+                  pageNumber: pageIdx + 1,
+                });
+              }
+            }
+          }
+        } catch {
+          // Skip individual image
+        }
+      }
+    } catch {
+      // Skip page
+    }
+  }
+
+  // Also try catalog-level extraction
+  if (extracted.length === 0) {
+    try {
+      const catalog = pdfDocAny.catalog;
+      if (catalog) {
+        const pages = catalog.Pages?.();
+        if (pages) {
+          const pageCount = pages.Count?.() || pdfDoc.getPageCount();
+          for (let i = 0; i < Math.min(pageCount, pdfDoc.getPageCount()); i++) {
+            const page = pdfDoc.getPage(i);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pageAny = page as any;
+            const annots = pageAny.node?.()?.Annots?.();
+            if (annots) {
+              const annotKeys = Object.keys(annots);
+              for (const ak of annotKeys) {
+                try {
+                  const annot = annots[ak];
+                  const ap = annot?.Appearance?.();
+                  if (ap) {
+                    const stream = ap?.getContents?.();
+                    if (stream && stream.length > 100) {
+                      const isJpeg = stream[0] === 0xFF && stream[1] === 0xD8;
+                      const isPng = stream[0] === 0x89 && stream[1] === 0x50;
+                      if (isJpeg || isPng) {
+                        extracted.push({
+                          bytes: stream,
+                          contentType: isJpeg ? 'image/jpeg' : 'image/png',
+                          pageNumber: i + 1,
+                        });
+                      }
+                    }
+                  }
+                } catch {
+                  // skip
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Document-level extraction also failed
+    }
+  }
+
+  return extracted;
 }
 
 /**
@@ -114,11 +246,12 @@ async function ocrPage(worker: any, page: any, scale: number): Promise<string> {
 }
 
 export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCancel }: PdfOcrProcessorProps) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'extracting' | 'ocr-fallback' | 'done' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'extracting' | 'ocr-fallback' | 'uploading-images' | 'done' | 'error'>('idle');
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [errorMsg, setErrorMsg] = useState('');
   const [extractedText, setExtractedText] = useState('');
   const [extractedLinks, setExtractedLinks] = useState<ExtractedLink[]>([]);
+  const [extractedImages, setExtractedImages] = useState<string[]>([]);
   const [pagesWithText, setPagesWithText] = useState(0);
   const [pagesWithOcr, setPagesWithOcr] = useState(0);
 
@@ -207,6 +340,31 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
       setExtractedLinks(allLinks);
       setPagesWithText(textPageCount);
       setPagesWithOcr(ocrPageCount);
+
+      // ── Extract embedded images using pdf-lib and upload to Cloudinary ──
+      setStatus('uploading-images');
+      const imageUrls: string[] = [];
+
+      try {
+        const embeddedImages = await extractEmbeddedImages(bytes);
+
+        for (const img of embeddedImages) {
+          try {
+            const blob = new Blob([img.bytes.buffer as ArrayBuffer], { type: img.contentType });
+            const ext = img.contentType.includes('jpeg') ? '.jpg' : '.png';
+            const file = new File([blob], `pdf-img-p${img.pageNumber}-${imageUrls.length}${ext}`, { type: img.contentType });
+            const result = await uploadToCloudinary(file);
+            imageUrls.push(result.url);
+          } catch (imgErr) {
+            console.error('Failed to upload embedded image:', imgErr);
+          }
+        }
+      } catch (cloudErr) {
+        console.error('Embedded image extraction failed:', cloudErr);
+        // Continue without images — text is still usable
+      }
+
+      setExtractedImages(imageUrls);
       setStatus('done');
     } catch (err) {
       console.error('PDF extraction error:', err);
@@ -216,7 +374,7 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
   }, [pdfBase64]);
 
   const handleUseText = () => {
-    onExtracted(extractedText, extractedLinks);
+    onExtracted(extractedText, extractedLinks, extractedImages);
   };
 
   return (
@@ -235,8 +393,8 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
         {status === 'idle' && (
           <>
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              This PDF has no embedded text layer. We'll extract the text using your browser.
-              Hyperlinks found in the PDF will be listed separately so you can add them manually.
+              This PDF has no embedded text layer. We'll extract the text and any embedded images
+              using your browser. Hyperlinks found in the PDF will be listed separately.
             </p>
             <p className="text-xs text-amber-600 dark:text-amber-400">
               Processing happens locally. Large documents may take a minute.
@@ -252,13 +410,13 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
                 onClick={runExtraction}
                 className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
               >
-                Extract Text
+                Extract Text & Images
               </button>
             </div>
           </>
         )}
 
-        {(status === 'loading' || status === 'extracting' || status === 'ocr-fallback') && (
+        {(status === 'loading' || status === 'extracting' || status === 'ocr-fallback' || status === 'uploading-images') && (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
@@ -266,6 +424,7 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
                 {status === 'loading' && 'Loading PDF in browser...'}
                 {status === 'extracting' && `Extracting text... Page ${progress.current} of ${progress.total}`}
                 {status === 'ocr-fallback' && `Running OCR for scanned pages... Page ${progress.current} of ${progress.total}`}
+                {status === 'uploading-images' && `Extracting embedded images & uploading to Cloudinary...`}
               </span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -311,6 +470,27 @@ export default function PdfOcrProcessor({ pdfBase64, filename, onExtracted, onCa
                         <li className="text-xs text-gray-400">...and {extractedLinks.length - 10} more</li>
                       )}
                     </ul>
+                  </div>
+                </div>
+              )}
+              {extractedImages.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <Image className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-purple-700 dark:text-purple-300">
+                      {extractedImages.length} embedded image(s) extracted & uploaded:
+                    </p>
+                    <div className="mt-2 grid grid-cols-3 gap-1.5 max-h-32 overflow-y-auto">
+                      {extractedImages.map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block">
+                          <img
+                            src={url.replace('/upload/', '/upload/w_150,h_150,c_fill/')}
+                            alt={`Image ${i + 1}`}
+                            className="w-full h-16 object-cover rounded border border-gray-200 dark:border-gray-700 hover:opacity-80 transition-opacity"
+                          />
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
