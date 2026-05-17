@@ -54,11 +54,6 @@ interface ExtractedImage {
   pageNumber: number;
 }
 
-/**
- * Extract embedded images from a PDF using pdf-lib.
- * Works with PDFs that store images as XObject/Image resources.
- * Returns array of image data with page numbers for positioning.
- */
 async function extractImagesFromPdf(pdfBytes: Uint8Array): Promise<ExtractedImage[]> {
   const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const extractedImages: ExtractedImage[] = [];
@@ -132,7 +127,6 @@ async function extractImagesFromPdf(pdfBytes: Uint8Array): Promise<ExtractedImag
     }
   }
 
-  // If pdf-lib internal extraction didn't work, try the catalog-level approach
   if (extractedImages.length === 0) {
     try {
       const catalog = pdfDocAny.catalog;
@@ -182,12 +176,77 @@ async function extractImagesFromPdf(pdfBytes: Uint8Array): Promise<ExtractedImag
   return extractedImages;
 }
 
-// ─── Text-to-HTML conversion ─────────────────────────────────────────────────
+// ─── OCR text extraction for scanned PDFs ────────────────────────────────────
 
 /**
- * Convert extracted PDF text into structured HTML.
- * Detects headings, paragraphs, lists, and preserves basic formatting.
+ * Attempt to extract text from a scanned/image-based PDF using OCR.
+ * Renders each page to a canvas image, then runs Tesseract.js on each.
+ * Limited to first `maxPages` to avoid timeouts on very large documents.
  */
+async function extractTextViaOcr(
+  pdfBytes: Uint8Array,
+  maxPages: number = 10,
+): Promise<{ text: string; pageCount: number; ocrPages: number }> {
+  // Dynamic imports to avoid bundling issues in edge runtime
+  const pdfjsLib = await import('pdfjs-dist');
+  const { createWorker } = await import('tesseract.js');
+
+  // Point the worker to the bundled ESM worker via CDN (avoids require.resolve in ESM)
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
+
+  const loadingTask = pdfjsLib.getDocument({ data: pdfBytes.slice() });
+  const pdf = await loadingTask.promise;
+  const totalPages = pdf.numPages;
+  const pagesToProcess = Math.min(totalPages, maxPages);
+
+  const worker = await createWorker('eng');
+
+  let fullText = '';
+  let ocrPages = 0;
+
+  try {
+    for (let pageNum = 1; pageNum <= pagesToProcess; pageNum++) {
+      try {
+        const page = await pdf.getPage(pageNum);
+        const scale = 2; // Higher scale = better OCR accuracy
+        const viewport = page.getViewport({ scale });
+
+        // Create an offscreen canvas
+        const canvas = new OffscreenCanvas(viewport.width, viewport.height);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ctx = canvas.getContext('2d') as any;
+        if (!ctx) continue;
+
+        await page.render({
+          canvasContext: ctx,
+          viewport,
+        }).promise;
+
+        // Convert canvas to data URL for Tesseract (accepts string | Blob | Buffer)
+        const blob = await canvas.convertToBlob({ type: 'image/png' });
+        const result = await worker.recognize(blob);
+        const pageText = result.data.text?.trim();
+
+        if (pageText) {
+          if (fullText) fullText += '\n\n';
+          fullText += pageText;
+        }
+        ocrPages++;
+      } catch (pageErr) {
+        console.error(`OCR failed for page ${pageNum}:`, pageErr);
+        // Continue with other pages
+      }
+    }
+  } finally {
+    await worker.terminate();
+  }
+
+  return { text: fullText, pageCount: totalPages, ocrPages };
+}
+
+// ─── Text-to-HTML conversion ─────────────────────────────────────────────────
+
 function textToStructuredHtml(text: string, imagesByPage: Map<number, string[]>): string {
   const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const lines = normalized.split('\n');
@@ -282,7 +341,6 @@ function textToStructuredHtml(text: string, imagesByPage: Map<number, string[]>)
     htmlParts.push(listType === 'ul' ? '</ul>' : '</ol>');
   }
 
-  // Interleave images at approximate positions based on page numbers
   if (imagesByPage.size === 0) {
     return htmlParts.join('\n');
   }
@@ -409,7 +467,6 @@ export async function POST(req: NextRequest) {
     let sourceType: 'upload' | 'gdrive' = 'upload';
 
     if (contentType.includes('multipart/form-data')) {
-      // ── File upload ──
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
 
@@ -425,7 +482,6 @@ export async function POST(req: NextRequest) {
       const arrayBuffer = await file.arrayBuffer();
       pdfBytes = new Uint8Array(arrayBuffer);
     } else {
-      // ── Google Drive link ──
       const body = await req.json();
       const driveUrl = String(body?.url || '').trim();
 
@@ -446,7 +502,7 @@ export async function POST(req: NextRequest) {
       pdfBytes = await downloadFromGoogleDrive(fileId);
     }
 
-    // ── Validate PDF ──
+    // ── Validate PDF header ──
     if (pdfBytes.length < 4) {
       return NextResponse.json({ error: 'The file appears to be empty or invalid.' }, { status: 400 });
     }
@@ -456,27 +512,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'The file does not appear to be a valid PDF.' }, { status: 400 });
     }
 
-    // ── Extract text (dynamic import to avoid build-time bundling issues) ──
-    let parsedText: string;
+    // ── Strategy 1: Try native text extraction (fast, works for digital PDFs) ──
+    let parsedText = '';
     let pageCount = 0;
+    let usedOcr = false;
+    let ocrPageCount = 0;
+
     try {
       const pdfParse = (await import('pdf-parse')).default;
       const parseResult = await pdfParse(Buffer.from(pdfBytes));
-      parsedText = parseResult.text || '';
+      parsedText = (parseResult.text || '').trim();
       pageCount = parseResult.numpages || 0;
-    } catch (err) {
-      console.error('PDF parse error:', err);
-      return NextResponse.json(
-        { error: 'Could not parse the PDF text. The file may be scanned/image-based or corrupted.' },
-        { status: 400 },
-      );
+    } catch {
+      // pdf-parse failed — likely a scanned PDF or corrupted file.
+      // Don't return yet; fall through to OCR attempt.
+      console.warn('pdf-parse failed, will attempt OCR fallback');
     }
 
-    if (!parsedText.trim()) {
-      return NextResponse.json(
-        { error: 'The PDF appears to contain no extractable text. It may be a scanned document.' },
-        { status: 400 },
-      );
+    // ── Strategy 2: If native extraction yielded no text, try OCR ──
+    if (!parsedText) {
+      try {
+        console.log('Attempting OCR text extraction for scanned PDF...');
+        const ocrResult = await extractTextViaOcr(pdfBytes, 10);
+        parsedText = ocrResult.text.trim();
+        pageCount = ocrResult.pageCount;
+        ocrPageCount = ocrResult.ocrPages;
+        usedOcr = true;
+
+        if (!parsedText) {
+          return NextResponse.json(
+            {
+              error:
+                'Could not extract any text from this PDF. The file may be severely corrupted, password-protected, or contain only images with no recognizable text.',
+            },
+            { status: 400 },
+          );
+        }
+      } catch (ocrErr) {
+        console.error('OCR extraction also failed:', ocrErr);
+        return NextResponse.json(
+          {
+            error:
+              'Could not parse the PDF. The file may be corrupted, password-protected, or in an unsupported format. If it is a scanned document, OCR extraction also failed — try a clearer scan.',
+          },
+          { status: 400 },
+        );
+      }
     }
 
     // ── Extract images ──
@@ -512,7 +593,6 @@ export async function POST(req: NextRequest) {
         }
       } catch (err) {
         console.error('PDF image extraction error:', err);
-        // Continue without images — text is still usable
       }
     }
 
@@ -527,6 +607,8 @@ export async function POST(req: NextRequest) {
       imagesProcessed,
       imagesFailed,
       pageCount,
+      usedOcr,
+      ocrPagesProcessed: ocrPageCount,
     });
   } catch (err) {
     console.error('PDF import error:', err);
