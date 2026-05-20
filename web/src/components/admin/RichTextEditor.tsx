@@ -168,6 +168,38 @@ export default function RichTextEditor({
     }
   }, [onChange, checkActiveFormats]);
 
+  const onPaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    if (!text || !editorRef.current) return;
+
+    // Insert plain text styled with the editor's default font so it matches
+    // the article's existing content regardless of source formatting
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+
+    const span = document.createElement('span');
+    span.style.fontFamily = 'var(--font-sans), system-ui, -apple-system, sans-serif';
+    span.style.fontSize = '1rem';
+    span.textContent = text;
+
+    range.insertNode(span);
+
+    // Move cursor past the inserted content
+    range.setStartAfter(span);
+    range.setEndAfter(span);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    isInternalChange.current = true;
+    const html = editorRef.current.innerHTML;
+    pushHistory(html);
+    onChange(html);
+  }, [onChange, pushHistory]);
+
   const onInput = useCallback(() => {
     if (!editorRef.current) return;
     isInternalChange.current = true;
@@ -386,6 +418,7 @@ export default function RichTextEditor({
           suppressContentEditableWarning
           onInput={onInput}
           onKeyDown={handleKeyDown}
+          onPaste={onPaste}
           className={`rich-editor-content ${minHeightClassName} p-4 sm:p-6 text-white focus:outline-none text-base leading-relaxed`}
         />
       </div>
