@@ -63,9 +63,13 @@ export default function CategoryPage() {
           ...(doc.data() as Omit<CategoryPost, 'id'>)
         }));
         
-        // Client-side sort to bypass Firestore composite index requirements
+        // Client-side sort: posts with images first, then by date
         fetchedPosts = fetchedPosts
           .sort((a, b) => {
+            const hasImageA = !!a.coverImage;
+            const hasImageB = !!b.coverImage;
+            if (hasImageA && !hasImageB) return -1;
+            if (!hasImageA && hasImageB) return 1;
             const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
             const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
             return dateB - dateA;
