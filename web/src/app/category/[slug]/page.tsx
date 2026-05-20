@@ -63,14 +63,13 @@ export default function CategoryPage() {
           ...(doc.data() as Omit<CategoryPost, 'id'>)
         }));
         
-        // Client-side sort and limit to bypass Firestore composite index requirements
+        // Client-side sort to bypass Firestore composite index requirements
         fetchedPosts = fetchedPosts
           .sort((a, b) => {
             const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
             const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
             return dateB - dateA;
-          })
-          .slice(0, 20);
+          });
         
         setPosts(fetchedPosts);
       } catch (error) {
