@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { LogOut, FileText, LayoutDashboard, Trash, Home, Image as ImageIcon, Settings, ChevronRight, Menu, X } from 'lucide-react';
+import { LogOut, FileText, LayoutDashboard, Trash, Home, Image as ImageIcon, Settings, ChevronRight, Menu, X, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -17,6 +17,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
   const navItems = [
     { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
+    { href: '/admin/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
     { href: '/admin/dashboard/home', icon: Home, label: 'Home Page' },
     { href: '/admin/dashboard/posts', icon: FileText, label: 'Posts Manager', isParent: true },
     { href: '/admin/dashboard/posts/new', icon: FileText, label: 'Add New', indent: true },
@@ -69,6 +70,9 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
           <div className="text-[10px] uppercase font-bold text-gray-600 tracking-widest px-3 mb-2">Dashboard</div>
           <Link href="/admin/dashboard" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-300 hover:text-[#C5A059] hover:bg-[#2F2A26]/30'}`}>
             <LayoutDashboard size={18} /> Overview
+          </Link>
+          <Link href="/admin/dashboard/analytics" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/analytics') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-300 hover:text-[#C5A059] hover:bg-[#2F2A26]/30'}`}>
+            <BarChart3 size={18} /> Analytics
           </Link>
 
           <div className="mt-4 mb-2 text-[10px] uppercase font-bold text-gray-600 tracking-widest px-3 pt-3 border-t border-[#2F2A26]">Content</div>
