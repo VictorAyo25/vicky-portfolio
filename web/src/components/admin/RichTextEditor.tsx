@@ -242,7 +242,7 @@ export default function RichTextEditor({
     <div className="space-y-2">
       <label className="text-xs font-bold uppercase tracking-widest text-[#C5A059]">{label}</label>
 
-      <div className="border border-[#2F2A26] rounded-xl overflow-hidden bg-[#0F0E0D]">
+      <div className="border border-[#2F2A26] rounded-xl bg-[#0F0E0D]">
         {/* ===== TOOLBAR ===== */}
         {/* 
           Mobile: 2-row wrapped layout — Row 1 = formatting icons, Row 2 = font/size dropdowns
