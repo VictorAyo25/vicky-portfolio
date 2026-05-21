@@ -3,6 +3,7 @@ import { Playfair_Display, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ConditionalNavigation from "@/components/ConditionalNavigation";
 import { ToastProvider } from "@/context/ToastContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import ClientLayout from "./ClientLayout";
 
 const playfair = Playfair_Display({
@@ -47,21 +48,37 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={`${playfair.variable} ${geistSans.variable} ${geistMono.variable} antialiased scroll-smooth`}>
-      <body className="bg-[#0F0E0D] text-[#F3F4F6] min-h-screen flex flex-col selection:bg-[#C5A059] selection:text-[#0F0E0D]">
-        <ToastProvider>
-            <ConditionalNavigation />
-            <ClientLayout>
-              {children}
-            </ClientLayout>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('theme') || 'dark';
+                  document.documentElement.setAttribute('data-theme', theme);
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
+      <body className="bg-background text-foreground min-h-screen flex flex-col selection:bg-gold selection:text-onyx transition-colors duration-300">
+        <ThemeProvider>
+          <ToastProvider>
+              <ConditionalNavigation />
+              <ClientLayout>
+                {children}
+              </ClientLayout>
 
-            {/* Admin access — small but clickable dot */}
-            <a
-              href="/admin"
-              aria-label="Admin"
-              title="Admin Portal"
-              className="fixed bottom-4 right-4 z-50 w-3 h-3 rounded-full bg-[#C5A059]/25 hover:bg-[#C5A059]/70 transition-colors duration-300"
-            />
-        </ToastProvider>
+              {/* Admin access — small but clickable dot */}
+              <a
+                href="/admin"
+                aria-label="Admin"
+                title="Admin Portal"
+                className="fixed bottom-4 right-4 z-50 w-3 h-3 rounded-full bg-gold/25 hover:bg-gold/70 transition-colors duration-300"
+              />
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

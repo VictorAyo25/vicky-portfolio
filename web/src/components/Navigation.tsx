@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, ChevronDown, ArrowRight, Play } from 'lucide-react';
+import { Menu, X, ChevronDown, ArrowRight, Play, Sun, Moon } from 'lucide-react';
 import { INITIAL_TAXONOMY } from '@/lib/taxonomy';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function Navigation() {
   const [scrolled, setScrolled] = useState(false);
@@ -12,6 +13,7 @@ export default function Navigation() {
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [expandedMobileCategory, setExpandedMobileCategory] = useState<string | null>(null);
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
 
   const navLinks = Object.keys(INITIAL_TAXONOMY);
 
@@ -122,6 +124,16 @@ export default function Navigation() {
               );
             })}
 
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-gray-400 hover:text-[#C5A059] transition-colors focus:outline-none min-h-10 min-w-10 flex items-center justify-center active:scale-95 cursor-pointer"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+
             <Link
               href="/contact"
               className={`ml-2 px-5 py-2.5 min-h-10 border rounded-full font-bold inline-flex items-center justify-center transition-all duration-300 ${
@@ -134,14 +146,24 @@ export default function Navigation() {
             </Link>
           </div>
 
-          {/* Mobile Menu Button */}
-          <button
-            className="lg:hidden text-[#F3F4F6] hover:text-[#C5A059] transition-colors min-h-11 min-w-11 inline-flex items-center justify-center active:scale-90"
-            onClick={toggleMobileMenu}
-            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-          >
-            {mobileMenuOpen ? <X size={26} /> : <Menu size={26} />}
-          </button>
+          {/* Mobile Menu Actions */}
+          <div className="flex items-center gap-1.5 lg:hidden">
+            <button
+              onClick={toggleTheme}
+              className="p-2.5 text-gray-400 hover:text-[#C5A059] transition-colors focus:outline-none min-h-11 min-w-11 flex items-center justify-center active:scale-90"
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+            
+            <button
+              className="text-[#F3F4F6] hover:text-[#C5A059] transition-colors min-h-11 min-w-11 inline-flex items-center justify-center active:scale-90"
+              onClick={toggleMobileMenu}
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            >
+              {mobileMenuOpen ? <X size={26} /> : <Menu size={26} />}
+            </button>
+          </div>
         </div>
       </nav>
 
