@@ -57,6 +57,10 @@ export default function AboutPageEditor() {
     try {
       const docRef = doc(db, 'pages', ABOUT_DOC_ID);
       await setDoc(docRef, content);
+      
+      // Update local storage so updates are instantly visible on reload
+      localStorage.setItem('vicky_about_content', JSON.stringify(content));
+      
       showToast('About page updated successfully', 'success');
     } catch (err) {
       console.error('Failed to save about page:', err);

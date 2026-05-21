@@ -18,10 +18,10 @@ interface HomeContent {
 
 const defaultContent: HomeContent = {
   heroName: 'Victoria Odueso',
-  heroTitle: 'Exceptional Writer',
+  heroTitle: 'SEO Writer',
   heroSubtitle: '& Content Strategist',
-  heroDescription: 'Crafting high-converting narratives for SaaS, FinTech, and modern brands. Where timeless quality meets data-driven performance.',
-  ctaPrimaryText: 'Explore Work',
+  heroDescription: 'Creating high-quality, engaging narratives that convert readers into loyal clients.',
+  ctaPrimaryText: 'Explore My Work',
   ctaSecondaryText: 'About Me',
 };
 
@@ -29,14 +29,26 @@ export default function Hero() {
   const [content, setContent] = useState<HomeContent>(defaultContent);
 
   useEffect(() => {
+    // Sync with localStorage instantly on mount to prevent stale flash
+    const cached = localStorage.getItem('vicky_home_content');
+    if (cached) {
+      try {
+        setContent(JSON.parse(cached));
+      } catch (err) {
+        console.error('Failed to parse cached home content:', err);
+      }
+    }
+
     async function loadContent() {
       try {
         const snap = await getDoc(doc(db, 'pages', 'page_home'));
         if (snap.exists()) {
-          setContent({ ...defaultContent, ...snap.data() } as HomeContent);
+          const freshData = { ...defaultContent, ...snap.data() } as HomeContent;
+          setContent(freshData);
+          localStorage.setItem('vicky_home_content', JSON.stringify(freshData));
         }
       } catch {
-        // Use defaults if fetch fails
+        // Use defaults/cache if fetch fails
       }
     }
     loadContent();

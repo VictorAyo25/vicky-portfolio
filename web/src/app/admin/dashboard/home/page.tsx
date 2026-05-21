@@ -20,10 +20,10 @@ interface HomeContent {
 
 const defaultContent: HomeContent = {
   heroName: 'Victoria Odueso',
-  heroTitle: 'Exceptional Writer',
+  heroTitle: 'SEO Writer',
   heroSubtitle: '& Content Strategist',
-  heroDescription: 'Crafting high-converting narratives for SaaS, FinTech, and modern brands. Where timeless quality meets data-driven performance.',
-  ctaPrimaryText: 'Explore Work',
+  heroDescription: 'Creating high-quality, engaging narratives that convert readers into loyal clients.',
+  ctaPrimaryText: 'Explore My Work',
   ctaSecondaryText: 'About Me',
 };
 
@@ -56,6 +56,10 @@ export default function HomePageEditor() {
     try {
       const docRef = doc(db, 'pages', HOME_DOC_ID);
       await setDoc(docRef, content);
+      
+      // Update local storage so updates are instantly visible on reload
+      localStorage.setItem('vicky_home_content', JSON.stringify(content));
+      
       showToast('Home page updated successfully', 'success');
     } catch (err) {
       console.error('Failed to save home page:', err);

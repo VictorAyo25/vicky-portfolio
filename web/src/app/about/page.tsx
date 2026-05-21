@@ -39,11 +39,24 @@ export default function AboutPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Synchronously check localStorage to render content instantly
+    const cached = localStorage.getItem('vicky_about_content');
+    if (cached) {
+      try {
+        setContent(JSON.parse(cached));
+        setLoading(false);
+      } catch (err) {
+        console.error('Failed to parse cached about content:', err);
+      }
+    }
+
     async function loadContent() {
       try {
         const snap = await getDoc(doc(db, 'pages', 'page_about'));
         if (snap.exists()) {
-          setContent({ ...defaultContent, ...snap.data() } as AboutContent);
+          const freshData = { ...defaultContent, ...snap.data() } as AboutContent;
+          setContent(freshData);
+          localStorage.setItem('vicky_about_content', JSON.stringify(freshData));
         }
       } catch (err) {
         console.error('Failed to load about page:', err);
