@@ -92,6 +92,20 @@
   .bg-\[\#141210\]\/95 {
     background-color: color-mix(in srgb, var(--bg-dark) 95%, transparent) !important;
   }
+  .bg-\[\#141210\]\/80 {
+    background-color: color-mix(in srgb, var(--bg-dark) 80%, transparent) !important;
+  }
+  .bg-\[\#191614\]\/60 {
+    background-color: color-mix(in srgb, var(--bg-charcoal) 60%, transparent) !important;
+  }
+  .border-\[\#2F2A26\]\/40,
+  .border-\[\#2f2a26\]\/40 {
+    border-color: color-mix(in srgb, var(--border) 40%, transparent) !important;
+  }
+  .border-\[\#2F2A26\]\/50,
+  .border-\[\#2f2a26\]\/50 {
+    border-color: color-mix(in srgb, var(--border) 50%, transparent) !important;
+  }
   .border-\[\#2F2A26\]\/60,
   .border-\[\#2f2a26\]\/60 {
     border-color: color-mix(in srgb, var(--border) 60%, transparent) !important;
