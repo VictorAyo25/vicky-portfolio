@@ -13,16 +13,18 @@ interface AboutContent {
   introTitle: string;
   content: string;
   ctaText: string;
+  heroImage?: string;
 }
 
 const defaultContent: AboutContent = {
-  heading: 'About Me',
+  heading: "Hi, I'm Victoria, a Freelance SEO Content Writer & Strategist.",
   subheading: 'SEO Content Writer & Strategist',
   introTitle: 'Crafting high-quality, engaging narratives that convert readers into loyal clients.',
   content: `<p>I am Victoria Odueso, a professional SEO content writer and strategist dedicated to elevating your brand's digital presence. My goal goes beyond merely putting words on a page; I focus on the science and psychology behind the text to create compelling narratives that drive organic traffic and generate meaningful leads.</p>
 <p>With extensive experience spanning keyword research, on-page optimization, and editorial planning, I have a proven track record of helping businesses achieve up to 25% growth in organic traffic and a remarkable 50% increase in content-generated leads. Whether navigating the nuances of global health tech or mapping search intent for dynamic SaaS platforms, I meticulously tailor every article, landing page, and social campaign to align with your conversion goals.</p>
 <p>If you require an authoritative blog piece, magnetic website copy, or a tightly woven editorial strategy, I am here to translate your vision into clear, results-driven content that ranks high and resonates deeply with your audience.</p>`,
   ctaText: "Let's Work Together",
+  heroImage: '/images/vickyimg1.jpg',
 };
 
 const portfolioLinks = [
@@ -39,7 +41,6 @@ export default function AboutPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Synchronously check localStorage to render content instantly
     const cached = localStorage.getItem('vicky_about_content');
     if (cached) {
       try {
@@ -67,6 +68,25 @@ export default function AboutPage() {
     loadContent();
   }, []);
 
+  const renderHeading = (text: string) => {
+    const lowerText = text.toLowerCase();
+    const splitKey = "victoria, a";
+    const index = lowerText.indexOf(splitKey);
+    if (index !== -1) {
+      const firstPart = text.substring(0, index + splitKey.length);
+      const secondPart = text.substring(index + splitKey.length);
+      return (
+        <>
+          {firstPart}{" "}
+          <span className="text-[#C5A059] italic block sm:inline">
+            {secondPart.trim()}
+          </span>
+        </>
+      );
+    }
+    return text;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0F0E0D] flex items-center justify-center">
@@ -86,33 +106,33 @@ export default function AboutPage() {
       <div className="relative z-10">
 
         {/* Hero */}
-        <section className="pt-28 md:pt-36 pb-12 md:pb-20 px-4 md:px-8">
-          <div className="max-w-4xl mx-auto text-center">
+        <section className="pt-28 md:pt-36 pb-12 md:pb-16 px-4 md:px-8">
+          <div className="max-w-4xl mx-auto text-center flex flex-col items-center">
             <motion.h1
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7 }}
-              className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl text-[#C5A059] leading-[0.95] tracking-tight mb-1"
+              className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-[4.5rem] font-medium leading-[1.1] tracking-tight mb-10 max-w-3xl text-center text-[#F3F4F6]"
+              style={{
+                textShadow: '0 0 45px rgba(197, 160, 89, 0.05)',
+              }}
             >
-              VICTORIA
-            </motion.h1>
-            <motion.h1
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.1 }}
-              className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl text-gray-500/30 leading-[0.95] tracking-tight mb-8"
-            >
-              ODUESO
+              {renderHeading(content.heading)}
             </motion.h1>
 
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.2 }}
-              className="text-lg sm:text-xl md:text-2xl font-serif text-gray-300 italic leading-relaxed mb-10 max-w-2xl mx-auto"
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.7, delay: 0.15 }}
+              className="relative w-full max-w-[340px] sm:max-w-[400px] mb-10 overflow-hidden rounded-2xl border border-[#2F2A26]/80 bg-[#141210] shadow-[0_20px_50px_rgba(0,0,0,0.6)] group"
             >
-              {content.subheading}
-            </motion.p>
+              <img
+                src={content.heroImage || '/images/vickyimg1.jpg'}
+                alt="Victoria Odueso"
+                className="w-full h-auto object-cover object-center transition-all duration-700 group-hover:scale-[1.03]"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent opacity-75 pointer-events-none" />
+            </motion.div>
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}

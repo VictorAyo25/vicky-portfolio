@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Loader2, FileText, Eye } from 'lucide-react';
+import { Save, Loader2, FileText, Eye, Link as LinkIcon, Images } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import RichTextEditor from '@/components/admin/RichTextEditor';
+import ImagePickerModal from '@/components/admin/ImagePickerModal';
 
 const ABOUT_DOC_ID = 'page_about';
 
@@ -16,6 +17,7 @@ interface AboutContent {
   introTitle:  string;
   content: string;
   ctaText: string;
+  heroImage?: string;
 }
 
 const defaultContent: AboutContent = {
@@ -26,6 +28,7 @@ const defaultContent: AboutContent = {
 <p>With extensive experience spanning keyword research, on-page optimization, and editorial planning, I have a proven track record of helping businesses achieve up to 25% growth in organic traffic and a remarkable 50% increase in content-generated leads.</p>
 <p>If you require an authoritative blog piece, magnetic website copy, or a tightly woven editorial strategy, I am here to translate your vision into clear, results-driven content that ranks high and resonates deeply with your audience.</p>`,
   ctaText: "Let's Work Together",
+  heroImage: '/images/vickyimg1.jpg',
 };
 
 export default function AboutPageEditor() {
@@ -33,6 +36,8 @@ export default function AboutPageEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [content, setContent] = useState<AboutContent>(defaultContent);
+  const [showImagePicker, setShowImagePicker] = useState(false);
+  const [mediaSourceType, setMediaSourceType] = useState<'url' | 'library'>('url');
 
   useEffect(() => {
     async function loadContent() {
@@ -40,7 +45,11 @@ export default function AboutPageEditor() {
         const docRef = doc(db, 'pages', ABOUT_DOC_ID);
         const snap = await getDoc(docRef);
         if (snap.exists()) {
-          setContent({ ...defaultContent, ...snap.data() } as AboutContent);
+          const data = snap.data() as AboutContent;
+          setContent({ ...defaultContent, ...data });
+          if (data.heroImage && !data.heroImage.startsWith('/images/')) {
+            setMediaSourceType('library');
+          }
         }
       } catch (err) {
         console.error('Failed to load about page content:', err);
@@ -164,8 +173,105 @@ export default function AboutPageEditor() {
               className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600"
             />
           </div>
+
+          {/* Hero Image Selection */}
+          <div className="space-y-4 pt-4 border-t border-[#2F2A26]">
+            <label className="text-xs font-bold uppercase tracking-widest text-[#C5A059] block">
+              About Portrait Image
+            </label>
+            <div className="flex flex-wrap gap-3 mb-4">
+              <button
+                type="button"
+                onClick={() => setMediaSourceType('url')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
+                  mediaSourceType === 'url'
+                    ? 'bg-[#C5A059] text-black font-bold'
+                    : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'
+                }`}
+              >
+                <LinkIcon size={16} />
+                External URL
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMediaSourceType('library');
+                  setShowImagePicker(true);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
+                  mediaSourceType === 'library'
+                    ? 'bg-[#C5A059] text-black font-bold'
+                    : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'
+                }`}
+              >
+                <Images size={16} />
+                Pick from Library
+              </button>
+            </div>
+
+            {mediaSourceType === 'url' ? (
+              <div className="space-y-2">
+                <input
+                  type="url"
+                  value={content.heroImage || ''}
+                  onChange={(e) => setContent({ ...content, heroImage: e.target.value })}
+                  placeholder="e.g. /images/vickyimg1.jpg"
+                  className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600"
+                />
+                <p className="text-xs text-gray-500">
+                  Provide a relative URL like <code>/images/vickyimg1.jpg</code> or an external image link.
+                </p>
+              </div>
+            ) : (
+              <div className="border border-[#2F2A26] rounded-lg p-4 bg-[#0F0E0D]">
+                {content.heroImage ? (
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-[#191614] flex-shrink-0">
+                      <img
+                        src={content.heroImage}
+                        alt="Selected portrait"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/images/vickyimg1.jpg';
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white font-medium">Selected image</p>
+                      <p className="text-xs text-gray-500 truncate">{content.heroImage}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContent({ ...content, heroImage: '' });
+                        setMediaSourceType('url');
+                      }}
+                      className="text-xs text-gray-400 hover:text-red-400 transition-colors flex-shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowImagePicker(true)}
+                    className="w-full py-3 text-sm text-gray-400 hover:text-[#C5A059] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Images size={16} /> Pick from Media Library
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
+
+      <ImagePickerModal
+        isOpen={showImagePicker}
+        onClose={() => setShowImagePicker(false)}
+        onSelect={(url) => setContent({ ...content, heroImage: url })}
+        title="Select Portrait Image"
+      />
     </div>
   );
 }
