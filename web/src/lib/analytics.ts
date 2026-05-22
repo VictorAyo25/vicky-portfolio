@@ -3,22 +3,30 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
-// Simple session-based dedup: don't fire twice for the same path in one navigation
-let lastTrackedPath = '';
+// Tracks the timestamp of the last fired tracking call per path.
+// A 2-second window prevents React StrictMode double-fires without
+// blocking legitimate repeat visits (e.g. navigating away and back).
+const recentlyTracked = new Map<string, number>();
+const DEDUP_WINDOW_MS = 2000;
 
 export function usePageTracking() {
   const pathname = usePathname();
-  const hasTracked = useRef(false);
+  // Ref prevents the effect from closing over a stale fired state
+  const firedForPath = useRef<string | null>(null);
 
   useEffect(() => {
     // Skip admin pages
     if (pathname.startsWith('/admin')) return;
 
-    // Skip if we already tracked this path (prevents double-fire from strict mode)
-    if (pathname === lastTrackedPath && hasTracked.current) return;
+    // Already fired for this path during this component mount cycle
+    if (firedForPath.current === pathname) return;
 
-    lastTrackedPath = pathname;
-    hasTracked.current = true;
+    // Dedup within the 2-second window (catches StrictMode double-invoke)
+    const lastTime = recentlyTracked.get(pathname);
+    if (lastTime && Date.now() - lastTime < DEDUP_WINDOW_MS) return;
+
+    firedForPath.current = pathname;
+    recentlyTracked.set(pathname, Date.now());
 
     // Fire-and-forget tracking call
     fetch('/api/analytics/track', {

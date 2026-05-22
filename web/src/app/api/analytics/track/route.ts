@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
+// Returns true for loopback/private IPs that can't be geolocated
+function isPrivateIp(ip: string): boolean {
+  return (
+    ip === '::1' ||
+    ip === '127.0.0.1' ||
+    ip.startsWith('10.') ||
+    ip.startsWith('192.168.') ||
+    ip.startsWith('172.16.') ||
+    ip.startsWith('172.17.') ||
+    ip.startsWith('172.18.') ||
+    ip.startsWith('172.19.') ||
+    ip.startsWith('172.2') ||
+    ip.startsWith('172.30.') ||
+    ip.startsWith('172.31.') ||
+    ip === 'localhost'
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -18,7 +36,7 @@ export async function POST(req: NextRequest) {
     let country = 'Unknown';
     let region = 'Unknown';
 
-    if (ip && ip !== 'unknown') {
+    if (ip && ip !== 'unknown' && !isPrivateIp(ip)) {
       try {
         const geoRes = await fetch(`https://ipapi.co/${ip}/json/`, {
           signal: AbortSignal.timeout(3000),
