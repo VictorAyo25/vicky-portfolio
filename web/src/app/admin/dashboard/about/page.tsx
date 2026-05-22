@@ -18,6 +18,7 @@ interface AboutContent {
   content: string;
   ctaText: string;
   heroImage?: string;
+  cvUrl?: string;
 }
 
 const defaultContent: AboutContent = {
@@ -29,6 +30,7 @@ const defaultContent: AboutContent = {
 <p>If you require an authoritative blog piece, magnetic website copy, or a tightly woven editorial strategy, I am here to translate your vision into clear, results-driven content that ranks high and resonates deeply with your audience.</p>`,
   ctaText: "Let's Work Together",
   heroImage: '/images/vickyimg1.jpg',
+  cvUrl: '/Victoria_Odueso_CV.pdf',
 };
 
 export default function AboutPageEditor() {
@@ -38,6 +40,8 @@ export default function AboutPageEditor() {
   const [content, setContent] = useState<AboutContent>(defaultContent);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [mediaSourceType, setMediaSourceType] = useState<'url' | 'library'>('url');
+  const [showCvPicker, setShowCvPicker] = useState(false);
+  const [cvSourceType, setCvSourceType] = useState<'url' | 'library'>('url');
 
   useEffect(() => {
     async function loadContent() {
@@ -49,6 +53,9 @@ export default function AboutPageEditor() {
           setContent({ ...defaultContent, ...data });
           if (data.heroImage && !data.heroImage.startsWith('/images/')) {
             setMediaSourceType('library');
+          }
+          if (data.cvUrl && !data.cvUrl.startsWith('/')) {
+            setCvSourceType('library');
           }
         }
       } catch (err) {
@@ -263,6 +270,89 @@ export default function AboutPageEditor() {
               </div>
             )}
           </div>
+
+          {/* CV Document Selection */}
+          <div className="space-y-4 pt-4 border-t border-[#2F2A26]">
+            <label className="text-xs font-bold uppercase tracking-widest text-[#C5A059] block">
+              CV Document (PDF)
+            </label>
+            <div className="flex flex-wrap gap-3 mb-4">
+              <button
+                type="button"
+                onClick={() => setCvSourceType('url')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
+                  cvSourceType === 'url'
+                    ? 'bg-[#C5A059] text-black font-bold'
+                    : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'
+                }`}
+              >
+                <LinkIcon size={16} />
+                External URL / Relative Path
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCvSourceType('library');
+                  setShowCvPicker(true);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
+                  cvSourceType === 'library'
+                    ? 'bg-[#C5A059] text-black font-bold'
+                    : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'
+                }`}
+              >
+                <Images size={16} />
+                Pick from Library
+              </button>
+            </div>
+
+            {cvSourceType === 'url' ? (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={content.cvUrl || ''}
+                  onChange={(e) => setContent({ ...content, cvUrl: e.target.value })}
+                  placeholder="e.g. /Victoria_Odueso_CV.pdf"
+                  className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600"
+                />
+                <p className="text-xs text-gray-500">
+                  Provide a relative path like <code>/Victoria_Odueso_CV.pdf</code> or an external Cloudinary link.
+                </p>
+              </div>
+            ) : (
+              <div className="border border-[#2F2A26] rounded-lg p-4 bg-[#0F0E0D]">
+                {content.cvUrl ? (
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-lg bg-[#191614] border border-[#2F2A26] flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-6 h-6 text-[#C5A059]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white font-medium">Selected CV Document</p>
+                      <p className="text-xs text-gray-500 truncate">{content.cvUrl}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContent({ ...content, cvUrl: '' });
+                        setCvSourceType('url');
+                      }}
+                      className="text-xs text-gray-400 hover:text-red-400 transition-colors flex-shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowCvPicker(true)}
+                    className="w-full py-3 text-sm text-gray-400 hover:text-[#C5A059] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Images size={16} /> Pick from Media Library
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
 
@@ -271,6 +361,13 @@ export default function AboutPageEditor() {
         onClose={() => setShowImagePicker(false)}
         onSelect={(url) => setContent({ ...content, heroImage: url })}
         title="Select Portrait Image"
+      />
+
+      <ImagePickerModal
+        isOpen={showCvPicker}
+        onClose={() => setShowCvPicker(false)}
+        onSelect={(url) => setContent({ ...content, cvUrl: url })}
+        title="Select CV PDF File"
       />
     </div>
   );

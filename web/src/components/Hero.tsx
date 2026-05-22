@@ -27,28 +27,50 @@ const defaultContent: HomeContent = {
 
 export default function Hero() {
   const [content, setContent] = useState<HomeContent>(defaultContent);
+  const [cvUrl, setCvUrl] = useState<string>('/Victoria_Odueso_CV.pdf');
 
   useEffect(() => {
     // Sync with localStorage instantly on mount to prevent stale flash
-    const cached = localStorage.getItem('vicky_home_content');
-    if (cached) {
+    const cachedHome = localStorage.getItem('vicky_home_content');
+    if (cachedHome) {
       try {
-        setContent(JSON.parse(cached));
+        setContent(JSON.parse(cachedHome));
       } catch (err) {
         console.error('Failed to parse cached home content:', err);
+      }
+    }
+    const cachedAbout = localStorage.getItem('vicky_about_content');
+    if (cachedAbout) {
+      try {
+        const aboutData = JSON.parse(cachedAbout);
+        if (aboutData.cvUrl) {
+          setCvUrl(aboutData.cvUrl);
+        }
+      } catch (err) {
+        console.error('Failed to parse cached about content:', err);
       }
     }
 
     async function loadContent() {
       try {
-        const snap = await getDoc(doc(db, 'pages', 'page_home'));
-        if (snap.exists()) {
-          const freshData = { ...defaultContent, ...snap.data() } as HomeContent;
+        const [homeSnap, aboutSnap] = await Promise.all([
+          getDoc(doc(db, 'pages', 'page_home')),
+          getDoc(doc(db, 'pages', 'page_about'))
+        ]);
+        if (homeSnap.exists()) {
+          const freshData = { ...defaultContent, ...homeSnap.data() } as HomeContent;
           setContent(freshData);
           localStorage.setItem('vicky_home_content', JSON.stringify(freshData));
         }
-      } catch {
-        // Use defaults/cache if fetch fails
+        if (aboutSnap.exists()) {
+          const aboutData = aboutSnap.data();
+          if (aboutData?.cvUrl) {
+            setCvUrl(aboutData.cvUrl);
+          }
+          localStorage.setItem('vicky_about_content', JSON.stringify(aboutData));
+        }
+      } catch (err) {
+        console.error('Failed to fetch home/about dynamic data:', err);
       }
     }
     loadContent();
@@ -130,7 +152,7 @@ export default function Hero() {
           className="flex items-center justify-center"
         >
           <a
-            href="/Victoria_Odueso_CV.pdf"
+            href={cvUrl}
             download="Victoria_Odueso_CV.pdf"
             className="group flex items-center gap-2 text-gray-500 hover:text-gold transition-colors duration-300 text-[11px] md:text-xs font-sans tracking-wide"
           >

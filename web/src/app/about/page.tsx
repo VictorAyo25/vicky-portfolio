@@ -14,6 +14,7 @@ interface AboutContent {
   content: string;
   ctaText: string;
   heroImage?: string;
+  cvUrl?: string;
 }
 
 const defaultContent: AboutContent = {
@@ -25,6 +26,7 @@ const defaultContent: AboutContent = {
 <p>If you require an authoritative blog piece, magnetic website copy, or a tightly woven editorial strategy, I am here to translate your vision into clear, results-driven content that ranks high and resonates deeply with your audience.</p>`,
   ctaText: "Let's Work Together",
   heroImage: '/images/vickyimg1.jpg',
+  cvUrl: '/Victoria_Odueso_CV.pdf',
 };
 
 const portfolioLinks = [
@@ -141,7 +143,7 @@ export default function AboutPage() {
               className="flex items-center justify-center"
             >
               <a
-                href="/Victoria_Odueso_CV.pdf"
+                href={content.cvUrl || "/Victoria_Odueso_CV.pdf"}
                 download="Victoria_Odueso_CV.pdf"
                 className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#C5A059] text-[#0F0E0D] px-7 py-3.5 rounded-full font-bold tracking-[0.15em] text-[11px] uppercase hover:bg-[#d4b06a] active:scale-[0.97] transition-all duration-200"
               >
@@ -217,7 +219,7 @@ export default function AboutPage() {
                   <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </Link>
                 <a
-                  href="/Victoria_Odueso_CV.pdf"
+                  href={content.cvUrl || "/Victoria_Odueso_CV.pdf"}
                   download="Victoria_Odueso_CV.pdf"
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-[#2F2A26] text-gray-400 px-7 py-3.5 rounded-full font-bold tracking-[0.15em] text-[11px] uppercase hover:border-[#C5A059] hover:text-[#C5A059] active:scale-[0.97] transition-all duration-200"
                 >
