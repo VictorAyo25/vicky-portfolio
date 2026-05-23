@@ -27,7 +27,7 @@ const defaultContent: HomeContent = {
 
 export default function Hero() {
   const [content, setContent] = useState<HomeContent>(defaultContent);
-  const [cvUrl, setCvUrl] = useState<string>('/Victoria_Odueso_CV.pdf');
+  const [cvUrl, setCvUrl] = useState<string>('/Victoria_Odueso_Resume.pdf');
 
   useEffect(() => {
     // Sync with localStorage instantly on mount to prevent stale flash
@@ -153,7 +153,7 @@ export default function Hero() {
         >
           <a
             href={cvUrl}
-            download="Victoria_Odueso_CV.pdf"
+            download="Victoria_Odueso_Resume.pdf"
             className="group flex items-center gap-2 text-gray-500 hover:text-gold transition-colors duration-300 text-[11px] md:text-xs font-sans tracking-wide"
           >
             <Download size={14} className="group-hover:translate-y-0.5 transition-transform" />

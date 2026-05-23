@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, deleteDoc, serverTimestamp, getDoc, writeBatch } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Trash2, Edit, RotateCcw, AlertOctagon, ChevronDown, Filter, Search, X } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
@@ -214,10 +214,26 @@ export default function ManageContent({
     const confirmPermanentDelete = async () => {
         if (!deleteId) return;
         try {
+            // Retrieve post metadata to check if it has chunked content
+            const postSnap = await getDoc(doc(db, 'posts', deleteId));
+            if (postSnap.exists()) {
+                const postData = postSnap.data();
+                if (postData.hasLargeContent) {
+                    console.log(`Deleting content chunks for post ${deleteId}...`);
+                    const chunksSnapshot = await getDocs(collection(db, 'posts', deleteId, 'content'));
+                    if (!chunksSnapshot.empty) {
+                        const batch = writeBatch(db);
+                        chunksSnapshot.docs.forEach(d => batch.delete(d.ref));
+                        await batch.commit();
+                        console.log(`Deleted ${chunksSnapshot.size} chunks.`);
+                    }
+                }
+            }
             await deleteDoc(doc(db, 'posts', deleteId));
             setPosts(prev => prev.filter(p => p.id !== deleteId));
             showToast('Post permanently deleted', 'success');
-        } catch {
+        } catch (err) {
+            console.error('Delete Error:', err);
             showToast('Operation failed', 'error');
         } finally {
             setDeleteId(null);

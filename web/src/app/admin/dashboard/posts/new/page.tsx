@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { fetchTaxonomy, addSubcategory, Taxonomy } from '@/lib/taxonomy';
 import { useToast } from '@/context/ToastContext';
@@ -271,21 +271,86 @@ export default function CreatePost() {
             });
           }
         }
-        await addDoc(collection(db, 'posts'), {
-          title,
-          slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-          description: description.trim(),
-          keywords,
-          category,
-          subCategory: finalSubCategory,
-          content,
-          mediaType,
-          mediaUrl,
-          coverImage,
-          published: true,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+
+        const contentSize = new Blob([content]).size;
+        const MAX_CONTENT_SIZE = 900000;
+
+        if (contentSize > MAX_CONTENT_SIZE) {
+          console.log(`Content is ${contentSize} bytes, splitting into chunks...`);
+          
+          const chunks = [];
+          let remaining = content;
+          
+          while (remaining.length > 0) {
+            const chunkSize = Math.min(MAX_CONTENT_SIZE, remaining.length);
+            let breakPoint = chunkSize;
+            
+            if (chunkSize < remaining.length) {
+              const lastPara = remaining.lastIndexOf('</p>', chunkSize);
+              if (lastPara > chunkSize * 0.5) {
+                breakPoint = lastPara + 4;
+              } else {
+                const lastBr = remaining.lastIndexOf('<br />', chunkSize);
+                if (lastBr > chunkSize * 0.5) {
+                  breakPoint = lastBr + 6;
+                } else {
+                  const lastPeriod = remaining.lastIndexOf('. ', chunkSize);
+                  if (lastPeriod > chunkSize * 0.5) {
+                    breakPoint = lastPeriod + 2;
+                  }
+                }
+              }
+            }
+            
+            chunks.push(remaining.substring(0, breakPoint));
+            remaining = remaining.substring(breakPoint);
+          }
+
+          const docRef = await addDoc(collection(db, 'posts'), {
+            title,
+            slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+            description: description.trim(),
+            keywords,
+            category,
+            subCategory: finalSubCategory,
+            mediaType,
+            mediaUrl,
+            coverImage,
+            published: true,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            hasLargeContent: true,
+            contentChunks: chunks.length,
+            contentPreview: content.substring(0, 500) + '...',
+          });
+
+          for (let i = 0; i < chunks.length; i++) {
+            await setDoc(doc(db, 'posts', docRef.id, 'content', `chunk_${i}`), {
+              index: i,
+              content: chunks[i]
+            });
+          }
+          console.log(`Saved ${chunks.length} content chunks`);
+        } else {
+          await addDoc(collection(db, 'posts'), {
+            title,
+            slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+            description: description.trim(),
+            keywords,
+            category,
+            subCategory: finalSubCategory,
+            content,
+            mediaType,
+            mediaUrl,
+            coverImage,
+            published: true,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            hasLargeContent: false,
+            contentChunks: 0,
+            contentPreview: '',
+          });
+        }
       })();
 
       await Promise.race([savePromise, timeoutPromise]);

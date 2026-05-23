@@ -30,7 +30,7 @@ const defaultContent: AboutContent = {
 <p>If you require an authoritative blog piece, magnetic website copy, or a tightly woven editorial strategy, I am here to translate your vision into clear, results-driven content that ranks high and resonates deeply with your audience.</p>`,
   ctaText: "Let's Work Together",
   heroImage: '/images/vickyimg1.jpg',
-  cvUrl: '/Victoria_Odueso_CV.pdf',
+  cvUrl: '/Victoria_Odueso_Resume.pdf',
 };
 
 export default function AboutPageEditor() {
@@ -312,11 +312,11 @@ export default function AboutPageEditor() {
                   type="text"
                   value={content.cvUrl || ''}
                   onChange={(e) => setContent({ ...content, cvUrl: e.target.value })}
-                  placeholder="e.g. /Victoria_Odueso_CV.pdf"
+                  placeholder="e.g. /Victoria_Odueso_Resume.pdf"
                   className="w-full bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-4 py-3 text-white focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] outline-none transition-all placeholder-gray-600"
                 />
                 <p className="text-xs text-gray-500">
-                  Provide a relative path like <code>/Victoria_Odueso_CV.pdf</code> or an external Cloudinary link.
+                  Provide a relative path like <code>/Victoria_Odueso_Resume.pdf</code> or an external Cloudinary link.
                 </p>
               </div>
             ) : (
