@@ -102,7 +102,7 @@ export default function CVPage() {
             
             <div className="space-y-2">
               <h2 className="font-serif text-2xl text-[#F3F4F6] tracking-wide">Curriculum Vitae</h2>
-              <p className="text-gray-400 text-sm">Victoria Odueso — Writer &amp; Content Strategist</p>
+              <p className="text-gray-400 text-sm">Victoria Odueso — SEO Writer &amp; Content Strategist</p>
             </div>
 
             <div className="w-full h-[1px] bg-[#2F2A26]" />
