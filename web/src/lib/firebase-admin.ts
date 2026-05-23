@@ -25,8 +25,10 @@ if (!privateKey) {
     : undefined;
 }
 
-if (getApps().length === 0 && projectId && clientEmail && privateKey) {
-  try {
+let firestore: any;
+
+try {
+  if (getApps().length === 0 && projectId && clientEmail && privateKey) {
     initializeApp({
       credential: cert({
         projectId,
@@ -34,9 +36,46 @@ if (getApps().length === 0 && projectId && clientEmail && privateKey) {
         privateKey,
       }),
     });
-  } catch (error) {
-    console.error('Firebase Admin init error:', error);
+    firestore = getFirestore();
+  } else if (getApps().length > 0) {
+    firestore = getFirestore();
+  } else {
+    console.warn('Firebase Admin: Credentials missing or invalid. Using proxy fallback.');
+    firestore = new Proxy({}, {
+      get: (target, prop) => {
+        if (prop === 'collection') {
+          return () => ({
+            add: async () => {
+              console.warn('Firebase Admin: collection.add called on proxy fallback. No-op.');
+              return { id: 'mock-id' };
+            }
+          });
+        }
+        return () => {
+          console.warn(`Firebase Admin: Method ${String(prop)} called on proxy fallback. No-op.`);
+          return target;
+        };
+      }
+    });
   }
+} catch (error) {
+  console.error('Firebase Admin init error:', error);
+  firestore = new Proxy({}, {
+    get: (target, prop) => {
+      if (prop === 'collection') {
+        return () => ({
+          add: async () => {
+            console.error('Firebase Admin: collection.add called on failed init proxy fallback. No-op.');
+            return { id: 'mock-id' };
+          }
+        });
+      }
+      return () => {
+        console.error(`Firebase Admin: Method ${String(prop)} called on failed init proxy fallback. No-op.`);
+        return target;
+      };
+    }
+  });
 }
 
-export const adminDb = getFirestore();
+export const adminDb = firestore;
