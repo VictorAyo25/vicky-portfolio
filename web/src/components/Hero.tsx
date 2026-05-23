@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from "next/link";
-import { ArrowRight, Download } from "lucide-react";
+import { ArrowRight, Eye } from "lucide-react";
 import { motion } from "framer-motion";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -153,13 +153,12 @@ export default function Hero() {
         >
           <a
             href={cvUrl}
-            download={cvUrl.startsWith('http') ? undefined : "Victoria_Odueso_Resume.pdf"}
-            target={cvUrl.startsWith('http') ? "_blank" : undefined}
-            rel={cvUrl.startsWith('http') ? "noopener noreferrer" : undefined}
+            target="_blank"
+            rel="noopener noreferrer"
             className="group flex items-center gap-2 text-gray-500 hover:text-gold transition-colors duration-300 text-[11px] md:text-xs font-sans tracking-wide"
           >
-            <Download size={14} className="group-hover:translate-y-0.5 transition-transform" />
-            <span>Download CV</span>
+            <Eye size={14} className="group-hover:scale-110 transition-transform duration-300" />
+            <span>View CV</span>
           </a>
         </motion.div>
       </div>
