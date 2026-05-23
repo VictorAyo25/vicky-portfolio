@@ -152,7 +152,7 @@ export default function Hero() {
           className="flex items-center justify-center"
         >
           <a
-            href={cvUrl}
+            href="/cv"
             target="_blank"
             rel="noopener noreferrer"
             className="group flex items-center gap-2 text-gray-500 hover:text-gold transition-colors duration-300 text-[11px] md:text-xs font-sans tracking-wide"
