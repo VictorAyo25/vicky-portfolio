@@ -125,7 +125,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
             
             <button
               onClick={toggleTheme}
-              className="p-1.5 text-gray-400 hover:text-[#C5A059] transition-colors focus:outline-none rounded-lg"
+              className="hidden md:block p-1.5 text-gray-400 hover:text-[#C5A059] transition-colors focus:outline-none rounded-lg"
               title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
