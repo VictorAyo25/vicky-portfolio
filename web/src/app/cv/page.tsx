@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download, Loader2, FileText, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, FileText } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -22,6 +22,18 @@ export default function CVPage() {
           const url = data.cvUrl || '';
           if (url && url !== '/Victoria_Odueso_Resume.pdf') {
             setCvUrl(url);
+            
+            // Format URL to force attachment download if from Cloudinary
+            const downloadUrl = url.includes('cloudinary.com') && url.includes('/upload/')
+              ? url.replace('/upload/', '/upload/fl_attachment/')
+              : url;
+            
+            // Auto trigger download
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = 'Victoria_Odueso_CV.pdf';
+            a.target = '_blank';
+            a.click();
           } else {
             setCvUrl('');
           }
@@ -54,7 +66,7 @@ export default function CVPage() {
           <h1 className="font-serif text-sm tracking-[0.15em] text-[#F3F4F6] uppercase">
             Victoria Odueso
           </h1>
-
+          
           <div className="w-[100px] md:w-[120px] text-right text-xs text-gray-500 font-medium tracking-wider hidden sm:block">
             Curriculum Vitae
           </div>
@@ -96,24 +108,18 @@ export default function CVPage() {
             <div className="w-full h-[1px] bg-[#2F2A26]" />
 
             <p className="text-xs text-gray-400 leading-relaxed max-w-[300px]">
-              You can view the document directly in your browser or download a copy to your device.
+              Your download should start automatically. If it doesn't, please click the button below.
             </p>
 
             <div className="w-full flex flex-col gap-3">
               <a
-                href={cvUrl}
+                href={cvUrl.includes('cloudinary.com') && cvUrl.includes('/upload/')
+                  ? cvUrl.replace('/upload/', '/upload/fl_attachment/')
+                  : cvUrl}
+                download="Victoria_Odueso_CV.pdf"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 bg-[#C5A059] text-[#0F0E0D] py-3.5 rounded-full font-bold tracking-[0.15em] text-xs uppercase hover:bg-[#d4b06a] active:scale-[0.98] transition-all duration-200"
-              >
-                <ExternalLink size={16} />
-                <span>Open &amp; View CV</span>
-              </a>
-
-              <a
-                href={cvUrl}
-                download="Victoria_Odueso_CV.pdf"
-                className="w-full flex items-center justify-center gap-2 border border-[#2F2A26] hover:border-[#C5A059]/40 text-gray-300 hover:text-white py-3.5 rounded-full font-bold tracking-[0.15em] text-xs uppercase active:scale-[0.98] transition-all duration-200"
+                className="w-full flex items-center justify-center gap-2 bg-[#C5A059] text-[#0F0E0D] py-3.5 rounded-full font-bold tracking-[0.15em] text-xs uppercase hover:bg-[#d4b06a] active:scale-[0.98] transition-all duration-200 cursor-pointer"
               >
                 <Download size={16} />
                 <span>Download CV</span>

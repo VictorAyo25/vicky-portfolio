@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, ChevronDown, ArrowRight, Play, Sun, Moon, Eye } from 'lucide-react';
+import { Menu, X, ChevronDown, ArrowRight, Play, Sun, Moon, Download } from 'lucide-react';
 import { INITIAL_TAXONOMY } from '@/lib/taxonomy';
 import { useTheme } from '@/context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -287,8 +287,8 @@ export default function Navigation() {
                   className="flex items-center justify-between py-4 text-xl font-serif border-b border-[#2F2A26]/30 text-[#F3F4F6] hover:text-[#C5A059] transition-colors"
                 >
                   <span className="flex items-center gap-3">
-                    <Eye size={16} className="text-gray-400" />
-                    View CV
+                    <Download size={16} className="text-gray-400" />
+                    Download CV
                   </span>
                 </Link>
               </div>

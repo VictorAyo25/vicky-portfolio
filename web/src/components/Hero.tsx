@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from "next/link";
-import { ArrowRight, Eye } from "lucide-react";
+import { ArrowRight, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -140,10 +140,10 @@ export default function Hero() {
             href="/cv"
             target="_blank"
             rel="noopener noreferrer"
-            className="group flex items-center gap-2 text-gray-500 hover:text-gold transition-colors duration-300 text-[11px] md:text-xs font-sans tracking-wide"
+            className="group flex items-center gap-2 text-gray-500 hover:text-gold transition-colors duration-300 text-[11px] md:text-xs font-sans tracking-wide cursor-pointer"
           >
-            <Eye size={14} className="group-hover:scale-110 transition-transform duration-300" />
-            <span>View CV</span>
+            <Download size={14} className="group-hover:scale-110 transition-transform duration-300" />
+            <span>Download CV</span>
           </a>
         </motion.div>
       </div>
