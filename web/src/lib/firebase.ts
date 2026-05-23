@@ -23,3 +23,4 @@ try {
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+storage.maxUploadRetryTime = 6000; // Fail fast (6s) if bucket does not exist or network is blocked
