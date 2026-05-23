@@ -15,6 +15,7 @@ import ImagePickerModal from '@/components/admin/ImagePickerModal';
 import ConfirmModal from '@/components/admin/ConfirmModal';
 import PdfOcrProcessor, { type ExtractedLink } from '@/components/admin/PdfOcrProcessor';
 import { textToStructuredHtml } from '@/lib/textToHtml';
+import { processBase64Images } from '@/lib/base64Uploader';
 
 type MediaType = 'url' | 'upload' | 'library';
 
@@ -369,6 +370,10 @@ export default function EditPostPage() {
     );
 
     try {
+      // Pre-process any pasted or inserted inline base64 images to Cloudinary
+      const finalContent = await processBase64Images(content, showToast);
+      setContent(finalContent);
+
       const savePromise = (async () => {
         let finalSubCategory = subCategory;
 
@@ -377,14 +382,14 @@ export default function EditPostPage() {
           finalSubCategory = newSubCategoryName.trim();
         }
 
-        const contentSize = Buffer.byteLength(content, 'utf8');
-        const MAX_CONTENT_SIZE = 900000;
+        const contentSize = Buffer.byteLength(finalContent, 'utf8');
+        const MAX_CONTENT_SIZE = 150000; // character length limit (approx 150-200KB per chunk)
         
-        if (contentSize > MAX_CONTENT_SIZE) {
+        if (contentSize > 900000 || finalContent.length > MAX_CONTENT_SIZE) {
           console.log(`Content is ${contentSize} bytes, splitting into chunks...`);
           
           const chunks = [];
-          let remaining = content;
+          let remaining = finalContent;
           
           while (remaining.length > 0) {
             const chunkSize = Math.min(MAX_CONTENT_SIZE, remaining.length);
@@ -423,7 +428,7 @@ export default function EditPostPage() {
             updatedAt: new Date(),
             hasLargeContent: true,
             contentChunks: chunks.length,
-            contentPreview: content.substring(0, 500) + '...',
+            contentPreview: finalContent.substring(0, 500) + '...',
           });
           
           const oldChunksSnapshot = await getDocs(collection(db, 'posts', id, 'content'));
@@ -446,7 +451,7 @@ export default function EditPostPage() {
             keywords,
             category,
             subCategory: finalSubCategory,
-            content,
+            content: finalContent,
             mediaType,
             mediaUrl,
             coverImage,

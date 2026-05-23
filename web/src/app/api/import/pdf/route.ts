@@ -319,19 +319,28 @@ export async function POST(req: NextRequest) {
         try {
           const extractedImages = await extractImagesFromPdf(pdfBytes);
 
-          for (const img of extractedImages) {
+          const uploadPromises = extractedImages.map(async (img) => {
             try {
               const cloudinaryUrl = await uploadImageToCloudinary(
                 img.bytes,
                 img.contentType,
                 `pdf-page${img.pageNumber}-img${img.index}`,
               );
-              const existing = imagesByPage.get(img.pageNumber) || [];
-              existing.push(cloudinaryUrl);
-              imagesByPage.set(img.pageNumber, existing);
-              imagesProcessed++;
+              return { pageNumber: img.pageNumber, url: cloudinaryUrl };
             } catch (err) {
               console.error(`Failed to upload PDF image ${img.index}:`, err);
+              return null;
+            }
+          });
+
+          const results = await Promise.all(uploadPromises);
+          for (const res of results) {
+            if (res) {
+              const existing = imagesByPage.get(res.pageNumber) || [];
+              existing.push(res.url);
+              imagesByPage.set(res.pageNumber, existing);
+              imagesProcessed++;
+            } else {
               imagesFailed++;
             }
           }

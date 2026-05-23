@@ -14,6 +14,7 @@ import ImagePickerModal from '@/components/admin/ImagePickerModal';
 import ConfirmModal from '@/components/admin/ConfirmModal';
 import PdfOcrProcessor, { type ExtractedLink } from '@/components/admin/PdfOcrProcessor';
 import { textToStructuredHtml } from '@/lib/textToHtml';
+import { processBase64Images } from '@/lib/base64Uploader';
 
 const AUTOSAVE_DEBOUNCE_MS = 3000;
 const SAVE_TIMEOUT_MS = 30000;
@@ -259,6 +260,10 @@ export default function CreatePost() {
     );
 
     try {
+      // Pre-process any pasted or inserted inline base64 images to Cloudinary
+      const finalContent = await processBase64Images(content, showToast);
+      setContent(finalContent);
+
       const savePromise = (async () => {
         let finalSubCategory = subCategory;
         if (isNewSubCategoryMode && newSubCategoryName.trim()) {
@@ -272,14 +277,14 @@ export default function CreatePost() {
           }
         }
 
-        const contentSize = new Blob([content]).size;
-        const MAX_CONTENT_SIZE = 900000;
+        const contentSize = new Blob([finalContent]).size;
+        const MAX_CONTENT_SIZE = 150000; // character length limit (approx 150-200KB per chunk)
 
-        if (contentSize > MAX_CONTENT_SIZE) {
+        if (contentSize > 900000 || finalContent.length > MAX_CONTENT_SIZE) {
           console.log(`Content is ${contentSize} bytes, splitting into chunks...`);
           
           const chunks = [];
-          let remaining = content;
+          let remaining = finalContent;
           
           while (remaining.length > 0) {
             const chunkSize = Math.min(MAX_CONTENT_SIZE, remaining.length);
@@ -321,7 +326,7 @@ export default function CreatePost() {
             updatedAt: serverTimestamp(),
             hasLargeContent: true,
             contentChunks: chunks.length,
-            contentPreview: content.substring(0, 500) + '...',
+            contentPreview: finalContent.substring(0, 500) + '...',
           });
 
           for (let i = 0; i < chunks.length; i++) {
@@ -339,7 +344,7 @@ export default function CreatePost() {
             keywords,
             category,
             subCategory: finalSubCategory,
-            content,
+            content: finalContent,
             mediaType,
             mediaUrl,
             coverImage,

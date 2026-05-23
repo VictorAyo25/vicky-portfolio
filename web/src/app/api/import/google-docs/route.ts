@@ -107,36 +107,44 @@ async function processImagesInHtml(html: string): Promise<{ html: string; imageC
     return { html, imageCount: 0, failedCount: 0 };
   }
 
-  let processedHtml = html;
-  let failedCount = 0;
-
-  // Process images sequentially to avoid rate limits
-  for (const match of matches) {
+  // Parallelized uploads: build promises for each image download & Cloudinary upload
+  const uploadPromises = matches.map(async (match) => {
     const originalTag = match[0];
     const originalSrc = match[1];
 
-    // Skip data URIs and already-Cloudinary URLs
     if (originalSrc.startsWith('data:') || originalSrc.includes('cloudinary.com')) {
-      continue;
+      return null;
     }
 
     try {
       const cloudinaryUrl = await uploadImageToCloudinary(originalSrc, cloudName, uploadPreset);
-
-      // Replace only the src attribute, preserving everything else (width, height, style, class, alt, etc.)
-      const updatedTag = originalTag.replace(
-        srcRegex(originalSrc),
-        `src="${cloudinaryUrl}"`,
-      );
-      processedHtml = processedHtml.replace(originalTag, updatedTag);
+      return { originalTag, originalSrc, cloudinaryUrl };
     } catch (err) {
       console.error(`Failed to re-upload image ${originalSrc}:`, err);
+      return { originalTag, originalSrc, cloudinaryUrl: null };
+    }
+  });
+
+  const results = await Promise.all(uploadPromises);
+  let processedHtml = html;
+  let failedCount = 0;
+  let imageCount = 0;
+
+  for (const res of results) {
+    if (!res) continue;
+    imageCount++;
+    if (res.cloudinaryUrl) {
+      const updatedTag = res.originalTag.replace(
+        srcRegex(res.originalSrc),
+        `src="${res.cloudinaryUrl}"`,
+      );
+      processedHtml = processedHtml.replace(res.originalTag, updatedTag);
+    } else {
       failedCount++;
-      // Keep the original Google URL as fallback — image may still work short-term
     }
   }
 
-  return { html: processedHtml, imageCount: matches.length, failedCount };
+  return { html: processedHtml, imageCount, failedCount };
 }
 
 /**
