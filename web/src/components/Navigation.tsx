@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, ChevronDown, ArrowRight, Play, Sun, Moon } from 'lucide-react';
+import { Menu, X, ChevronDown, ArrowRight, Play, Sun, Moon, Eye } from 'lucide-react';
 import { INITIAL_TAXONOMY } from '@/lib/taxonomy';
 import { useTheme } from '@/context/ThemeContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Navigation() {
   const [scrolled, setScrolled] = useState(false);
@@ -168,91 +169,143 @@ export default function Navigation() {
       </nav>
 
       {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-[#0F0E0D]/98 backdrop-blur-2xl lg:hidden"
-          onClick={() => setMobileMenuOpen(false)}
-        >
-          <div
-            className="flex flex-col pt-24 px-6 md:px-10 h-full overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            className="fixed inset-0 z-40 bg-[#0F0E0D]/98 backdrop-blur-2xl lg:hidden flex flex-col"
+            onClick={() => setMobileMenuOpen(false)}
           >
-            <div className="flex flex-col gap-1">
-              <Link
-                href="/about"
-                className={`flex items-center justify-between py-4 text-2xl font-serif border-b border-[#2F2A26]/50 transition-colors ${
-                  pathname === '/about' ? 'text-[#C5A059]' : 'text-[#F3F4F6]'
-                }`}
+            {/* Header placeholder in overlay for layout continuity */}
+            <div className="h-16 md:h-20 px-4 md:px-8 flex items-center justify-between border-b border-[#2F2A26]/40 flex-shrink-0">
+              <span className="font-serif text-xl tracking-[0.15em] text-[#F3F4F6]">
+                VICTORIA<span className="text-[#C5A059]">.</span>
+              </span>
+              <button
+                className="text-[#F3F4F6] hover:text-[#C5A059] transition-colors min-h-11 min-w-11 inline-flex items-center justify-center active:scale-90"
+                onClick={toggleMobileMenu}
+                aria-label="Close menu"
               >
-                About
-              </Link>
-
-              <Link
-                href="/multimedia"
-                className={`flex items-center justify-between py-4 text-2xl font-serif border-b border-[#2F2A26]/50 transition-colors ${
-                  pathname === '/multimedia' ? 'text-[#C5A059]' : 'text-[#F3F4F6]'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <Play size={18} className="text-[#C5A059] fill-[#C5A059]" />
-                  Multimedia
-                </span>
-              </Link>
-
-              {navLinks.map((category) => {
-                const catSlug = category.toLowerCase().replace(/\s+/g, '-');
-                const hasSubs = INITIAL_TAXONOMY[category]?.length > 0;
-                const isExpanded = expandedMobileCategory === category;
-
-                return (
-                  <div key={category} className="border-b border-[#2F2A26]/50">
-                    <div className="flex items-center justify-between">
-                      <Link
-                        href={`/category/${catSlug}`}
-                        className={`flex-1 py-4 text-2xl font-serif transition-colors ${
-                          pathname.includes(catSlug) ? 'text-[#C5A059]' : 'text-[#F3F4F6]'
-                        }`}
-                      >
-                        {category}
-                      </Link>
-                      {hasSubs && (
-                        <button
-                          onClick={() => setExpandedMobileCategory(isExpanded ? null : category)}
-                          className="p-3 text-gray-500 active:scale-90 transition-transform"
-                          aria-label={`Toggle ${category} submenu`}
-                        >
-                          <ChevronDown size={20} className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                        </button>
-                      )}
-                    </div>
-                    {isExpanded && hasSubs && (
-                      <div className="pl-4 pb-3 border-l border-[#2F2A26] ml-4 flex flex-col gap-1">
-                        {INITIAL_TAXONOMY[category].map((sub) => (
-                          <Link
-                            key={sub}
-                            href={`/category/${catSlug}/${sub.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-                            className="py-2.5 text-sm font-sans text-gray-500 hover:text-[#C5A059] transition-colors capitalize"
-                          >
-                            {sub}
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              <Link
-                href="/contact"
-                className="mt-6 mb-8 inline-flex items-center justify-center gap-2 bg-[#C5A059] text-[#0F0E0D] px-8 py-4 rounded-full font-bold text-xs uppercase tracking-[0.15em] active:scale-[0.97] transition-transform"
-              >
-                Get in Touch
-                <ArrowRight size={14} />
-              </Link>
+                <X size={26} />
+              </button>
             </div>
-          </div>
-        </div>
-      )}
+
+            <div
+              className="flex-1 overflow-y-auto px-6 py-8 flex flex-col justify-between"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-col gap-1">
+                <Link
+                  href="/about"
+                  className={`flex items-center justify-between py-4 text-xl font-serif border-b border-[#2F2A26]/30 transition-colors ${
+                    pathname === '/about' ? 'text-[#C5A059]' : 'text-[#F3F4F6] hover:text-[#C5A059]'
+                  }`}
+                >
+                  <span>About</span>
+                  {pathname === '/about' && <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]" />}
+                </Link>
+
+                <Link
+                  href="/multimedia"
+                  className={`flex items-center justify-between py-4 text-xl font-serif border-b border-[#2F2A26]/30 transition-colors ${
+                    pathname === '/multimedia' ? 'text-[#C5A059]' : 'text-[#F3F4F6] hover:text-[#C5A059]'
+                  }`}
+                >
+                  <span className="flex items-center gap-3">
+                    <Play size={14} className={pathname === '/multimedia' ? 'text-[#C5A059] fill-[#C5A059]' : 'text-gray-400 fill-gray-400'} />
+                    Multimedia
+                  </span>
+                  {pathname === '/multimedia' && <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]" />}
+                </Link>
+
+                {navLinks.map((category) => {
+                  const catSlug = category.toLowerCase().replace(/\s+/g, '-');
+                  const hasSubs = INITIAL_TAXONOMY[category]?.length > 0;
+                  const isExpanded = expandedMobileCategory === category;
+                  const isActive = pathname.includes(catSlug);
+
+                  return (
+                    <div key={category} className="border-b border-[#2F2A26]/30">
+                      <div className="flex items-center justify-between">
+                        <Link
+                          href={`/category/${catSlug}`}
+                          className={`flex-1 py-4 text-xl font-serif transition-colors ${
+                            isActive ? 'text-[#C5A059]' : 'text-[#F3F4F6] hover:text-[#C5A059]'
+                          }`}
+                        >
+                          {category}
+                        </Link>
+                        {hasSubs && (
+                          <button
+                            onClick={() => setExpandedMobileCategory(isExpanded ? null : category)}
+                            className="p-3 text-gray-500 hover:text-[#C5A059] active:scale-90 transition-transform"
+                            aria-label={`Toggle ${category} submenu`}
+                          >
+                            <ChevronDown size={18} className={`transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#C5A059]' : ''}`} />
+                          </button>
+                        )}
+                      </div>
+                      <AnimatePresence initial={false}>
+                        {isExpanded && hasSubs && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.25, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="pl-4 pb-4 border-l border-[#C5A059]/40 ml-2 mt-1 flex flex-col gap-2.5">
+                              {INITIAL_TAXONOMY[category].map((sub) => {
+                                const subSlug = sub.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                                const isSubActive = pathname.includes(subSlug);
+                                return (
+                                  <Link
+                                    key={sub}
+                                    href={`/category/${catSlug}/${subSlug}`}
+                                    className={`text-sm font-sans capitalize transition-colors ${
+                                      isSubActive ? 'text-[#C5A059]' : 'text-gray-400 hover:text-white'
+                                    }`}
+                                  >
+                                    {sub}
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+
+                <Link
+                  href="/cv"
+                  target="_blank"
+                  className="flex items-center justify-between py-4 text-xl font-serif border-b border-[#2F2A26]/30 text-[#F3F4F6] hover:text-[#C5A059] transition-colors"
+                >
+                  <span className="flex items-center gap-3">
+                    <Eye size={16} className="text-gray-400" />
+                    View CV
+                  </span>
+                </Link>
+              </div>
+
+              <div className="mt-8 mb-4">
+                <Link
+                  href="/contact"
+                  className="w-full inline-flex items-center justify-center gap-2 bg-[#C5A059] text-[#0F0E0D] py-3.5 rounded-full font-bold text-xs uppercase tracking-[0.15em] active:scale-[0.97] transition-all hover:bg-[#d4b06a]"
+                >
+                  Get in Touch
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

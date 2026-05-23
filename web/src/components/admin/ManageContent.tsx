@@ -38,6 +38,7 @@ export default function ManageContent({
     const [sortMode, setSortMode] = useState<'posted_desc' | 'posted_asc' | 'edited_desc' | 'edited_asc'>('edited_desc');
     const [imageFilter, setImageFilter] = useState<'all' | 'no_image' | 'has_image'>('all');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft'>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
@@ -137,13 +138,24 @@ export default function ManageContent({
                 if (imageFilter === 'no_image') return !post.coverImage;
                 return true;
             })
+            .filter((post) => {
+                if (statusFilter === 'all') return true;
+                return post.status === statusFilter;
+            })
             .sort((a, b) => {
                 if (sortMode === 'posted_desc') return getPostedMs(b) - getPostedMs(a);
                 if (sortMode === 'posted_asc') return getPostedMs(a) - getPostedMs(b);
                 if (sortMode === 'edited_asc') return getEditedMs(a) - getEditedMs(b);
                 return getEditedMs(b) - getEditedMs(a);
             });
-    }, [filteredPosts, sortMode, imageFilter, searchQuery]);
+    }, [filteredPosts, sortMode, imageFilter, statusFilter, searchQuery]);
+
+    const handleResetFilters = () => {
+        setSearchQuery('');
+        setCategoryFilter('all');
+        setImageFilter('all');
+        setStatusFilter('all');
+    };
 
     useEffect(() => {
         try {
@@ -313,7 +325,7 @@ export default function ManageContent({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
             >
-                <header className="mb-8 rounded-2xl border border-[#2F2A26] bg-[#171311] px-6 py-6 lg:px-8 lg:py-7 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <header className="mb-6 rounded-2xl border border-[#2F2A26] bg-[#171311] px-6 py-6 lg:px-8 lg:py-7 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <p className="text-[11px] uppercase tracking-[0.2em] text-[#C5A059] mb-2">
                             {isTrash ? 'Archive' : 'Content'}
@@ -343,13 +355,46 @@ export default function ManageContent({
                             </div>
                         )}
                     </div>
-                    <div className="flex items-center flex-wrap gap-3 self-start lg:self-auto">
+                    {!isTrash && (
+                        <Link
+                            href="/admin/dashboard/posts/new"
+                            className="bg-[#C5A059] text-black px-6 py-3 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-[#d4b06a] active:scale-[0.98] transition-all min-h-11 inline-flex items-center justify-center self-start lg:self-auto"
+                        >
+                            Create New
+                        </Link>
+                    )}
+                </header>
+
+                {/* Search & Filters Toolbar */}
+                <div className="mb-6 rounded-2xl border border-[#2F2A26] bg-[#141210] p-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    {/* Search Input */}
+                    <div className="relative flex-1 max-w-md w-full">
+                        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search posts by title, category..."
+                            className="bg-[#0F0E0D] border border-[#2F2A26] rounded-xl pl-10 pr-10 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] transition-all w-full"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors cursor-pointer"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Filter Dropdowns */}
+                    <div className="flex items-center flex-wrap gap-2.5">
                         {/* Category Filter */}
                         {!isTrash && availableCategories.length > 0 && (
                             <select
                                 value={categoryFilter}
                                 onChange={(e) => setCategoryFilter(e.target.value)}
-                                className="bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
+                                className="bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-3 py-2.5 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-[#C5A059] hover:border-gray-700 transition-colors"
                                 aria-label="Filter by category"
                             >
                                 <option value="all">All Categories</option>
@@ -358,36 +403,36 @@ export default function ManageContent({
                                 ))}
                             </select>
                         )}
-                        {/* Search */}
-                        <div className="relative">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search posts..."
-                                className="bg-[#0F0E0D] border border-[#2F2A26] rounded-lg pl-9 pr-8 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-[#C5A059] w-48"
-                            />
-                            {searchQuery && (
-                                <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-                                    <X size={14} />
-                                </button>
-                            )}
-                        </div>
+
+                        {/* Status Filter */}
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'published' | 'draft')}
+                            className="bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-3 py-2.5 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-[#C5A059] hover:border-gray-700 transition-colors"
+                            aria-label="Filter by status"
+                        >
+                            <option value="all">Status: All</option>
+                            <option value="published">Published Only</option>
+                            <option value="draft">Drafts Only</option>
+                        </select>
+
+                        {/* Image Filter */}
                         <select
                             value={imageFilter}
                             onChange={(e) => setImageFilter(e.target.value as 'all' | 'no_image' | 'has_image')}
-                            className="bg-[#0F0E0D] border border-[#C5A059]/50 rounded-lg px-3 py-2 text-xs text-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
+                            className="bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-3 py-2.5 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-[#C5A059] hover:border-gray-700 transition-colors"
                             aria-label="Filter by image"
                         >
                             <option value="all">Image: All</option>
                             <option value="no_image">Needs Cover Image</option>
                             <option value="has_image">Has Cover Image</option>
                         </select>
+
+                        {/* Sort Mode */}
                         <select
                             value={sortMode}
                             onChange={(e) => setSortMode(e.target.value as 'posted_desc' | 'posted_asc' | 'edited_desc' | 'edited_asc')}
-                            className="bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
+                            className="bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-3 py-2.5 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-[#C5A059] hover:border-gray-700 transition-colors"
                             aria-label="Sort posts"
                         >
                             <option value="edited_desc">Edited: Newest first</option>
@@ -396,32 +441,18 @@ export default function ManageContent({
                             <option value="posted_asc">Posted: Oldest first</option>
                         </select>
 
-                        {!isTrash && (
-                            <Link
-                                href="/admin/dashboard/posts/new"
-                                className="bg-[#C5A059] text-black px-6 py-3 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-[#d4b06a] active:scale-[0.98] transition-all min-h-11 inline-flex items-center justify-center"
+                        {/* Reset Filters */}
+                        {(searchQuery !== '' || categoryFilter !== 'all' || imageFilter !== 'all' || statusFilter !== 'all') && (
+                            <button
+                                onClick={handleResetFilters}
+                                className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all border border-red-500/20 cursor-pointer"
                             >
-                                Create New
-                            </Link>
+                                <X size={14} />
+                                Clear Filters
+                            </button>
                         )}
                     </div>
-                </header>
-
-                {/* Active filter summary */}
-                {!isTrash && categoryFilter !== 'all' && (
-                    <div className="mb-4 flex items-center gap-2">
-                        <Filter size={14} className="text-[#C5A059]" />
-                        <span className="text-xs text-gray-400">
-                            Showing {sortedPosts.length} post{sortedPosts.length !== 1 ? 's' : ''} in <strong className="text-[#C5A059]">{categoryFilter}</strong>
-                        </span>
-                        <button
-                            onClick={() => setCategoryFilter('all')}
-                            className="text-xs text-gray-500 hover:text-white underline"
-                        >
-                            Show all
-                        </button>
-                    </div>
-                )}
+                </div>
 
                 {loading ? (
                     <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#C5A059]" /></div>
