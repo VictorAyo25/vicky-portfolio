@@ -47,11 +47,17 @@ export default function AnalyticsPage() {
     fetchVisitors();
   }, []);
 
-  const totalVisitors = visitors.length;
+  const filteredVisitors = useMemo(() => {
+    return visitors.filter(
+      (v) => v.country && v.country !== 'Unknown' && v.city && v.city !== 'Unknown'
+    );
+  }, [visitors]);
+
+  const totalVisitors = filteredVisitors.length;
 
   const countryStats = useMemo(() => {
     const map = new Map<string, number>();
-    visitors.forEach((v) => {
+    filteredVisitors.forEach((v) => {
       const key = v.country || 'Unknown';
       map.set(key, (map.get(key) || 0) + 1);
     });
@@ -61,11 +67,11 @@ export default function AnalyticsPage() {
       count,
       percentage: totalVisitors > 0 ? Math.round((count / totalVisitors) * 100) : 0,
     }));
-  }, [visitors, totalVisitors]);
+  }, [filteredVisitors, totalVisitors]);
 
   const cityStats = useMemo(() => {
     const map = new Map<string, number>();
-    visitors.forEach((v) => {
+    filteredVisitors.forEach((v) => {
       const key = v.city && v.city !== 'Unknown' ? `${v.city}, ${v.country || 'Unknown'}` : 'Unknown';
       map.set(key, (map.get(key) || 0) + 1);
     });
@@ -75,19 +81,19 @@ export default function AnalyticsPage() {
       count,
       percentage: totalVisitors > 0 ? Math.round((count / totalVisitors) * 100) : 0,
     }));
-  }, [visitors, totalVisitors]);
+  }, [filteredVisitors, totalVisitors]);
 
-  const uniqueCountries = new Set(visitors.map((v) => v.country).filter(Boolean)).size;
-  const uniqueCities = new Set(visitors.map((v) => v.city).filter(Boolean).filter((c) => c !== 'Unknown')).size;
+  const uniqueCountries = new Set(filteredVisitors.map((v) => v.country).filter(Boolean)).size;
+  const uniqueCities = new Set(filteredVisitors.map((v) => v.city).filter(Boolean).filter((c) => c !== 'Unknown')).size;
 
   // Recent visitors (last 24h)
   const last24h = useMemo(() => {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    return visitors.filter((v) => {
+    return filteredVisitors.filter((v) => {
       const ts = v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0;
       return ts >= cutoff;
     }).length;
-  }, [visitors]);
+  }, [filteredVisitors]);
 
   if (loading) {
     return (
