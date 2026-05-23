@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Loader2, FileText, Eye, Link as LinkIcon, Images } from 'lucide-react';
+import { Save, Loader2, FileText, Eye, Link as LinkIcon, Images, Upload } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import RichTextEditor from '@/components/admin/RichTextEditor';
 import ImagePickerModal from '@/components/admin/ImagePickerModal';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 
 const ABOUT_DOC_ID = 'page_about';
 
@@ -42,6 +43,44 @@ export default function AboutPageEditor() {
   const [mediaSourceType, setMediaSourceType] = useState<'url' | 'library'>('url');
   const [showCvPicker, setShowCvPicker] = useState(false);
   const [cvSourceType, setCvSourceType] = useState<'url' | 'library'>('url');
+
+  const cvFileInputRef = useRef<HTMLInputElement>(null);
+  const [cvUploading, setCvUploading] = useState(false);
+  const [cvUploadProgress, setCvUploadProgress] = useState(0);
+
+  const handleCvUploadClick = () => {
+    cvFileInputRef.current?.click();
+  };
+
+  const handleCvFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCvUploading(true);
+    setCvUploadProgress(0);
+    try {
+      const result = await uploadToCloudinary(file, (p) => setCvUploadProgress(p));
+      const mediaId = `${result.publicId.replace(/\//g, '_')}_${Date.now()}`;
+      await setDoc(doc(db, 'media', mediaId), {
+        name: result.originalFilename,
+        url: result.url,
+        publicId: result.publicId,
+        size: result.bytes,
+        width: result.width,
+        height: result.height,
+        format: result.format,
+        createdAt: new Date().toISOString()
+      });
+      setContent((prev) => ({ ...prev, cvUrl: result.url }));
+      setCvSourceType('library');
+      showToast('CV uploaded and selected', 'success');
+    } catch (err) {
+      console.error('CV upload error:', err);
+      showToast(err instanceof Error ? err.message : 'Failed to upload CV', 'error');
+    } finally {
+      setCvUploading(false);
+      if (cvFileInputRef.current) cvFileInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     async function loadContent() {
@@ -296,13 +335,29 @@ export default function AboutPageEditor() {
                   setShowCvPicker(true);
                 }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
-                  cvSourceType === 'library'
+                  cvSourceType === 'library' && !cvUploading
                     ? 'bg-[#C5A059] text-black font-bold'
                     : 'bg-[#0F0E0D] text-gray-400 border border-[#2F2A26]'
                 }`}
               >
                 <Images size={16} />
                 Pick from Library
+              </button>
+              <input
+                type="file"
+                ref={cvFileInputRef}
+                onChange={handleCvFileChange}
+                className="hidden"
+                accept="application/pdf"
+              />
+              <button
+                type="button"
+                onClick={handleCvUploadClick}
+                disabled={cvUploading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors bg-[#0F0E0D] text-gray-400 border border-[#2F2A26] hover:border-[#C5A059] hover:text-[#C5A059] disabled:opacity-50"
+              >
+                <Upload size={16} />
+                {cvUploading ? `Uploading (${cvUploadProgress}%)` : 'Upload New PDF'}
               </button>
             </div>
 
