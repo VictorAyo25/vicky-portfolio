@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { adminDb } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 // Returns true for loopback/private IPs that can't be geolocated
 function isPrivateIp(ip: string): boolean {
@@ -54,15 +54,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Log to Firestore
-    await addDoc(collection(db, 'analytics_visitors'), {
+    // Log to Firestore using Admin SDK
+    await adminDb.collection('analytics_visitors').add({
       ip,
       city,
       country,
       region,
       page: page || '/',
       userAgent: req.headers.get('user-agent') || '',
-      timestamp: serverTimestamp(),
+      timestamp: FieldValue.serverTimestamp(),
     });
 
     return NextResponse.json({ success: true });
