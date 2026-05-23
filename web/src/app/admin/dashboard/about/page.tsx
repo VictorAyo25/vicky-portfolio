@@ -70,9 +70,24 @@ export default function AboutPageEditor() {
         format: result.format,
         createdAt: new Date().toISOString()
       });
-      setContent((prev) => ({ ...prev, cvUrl: result.url }));
+
+      const newCvUrl = result.url;
+      setContent((prev) => {
+        const updated = { ...prev, cvUrl: newCvUrl };
+        const docRef = doc(db, 'pages', ABOUT_DOC_ID);
+        setDoc(docRef, updated)
+          .then(() => {
+            localStorage.setItem('vicky_about_content', JSON.stringify(updated));
+            showToast('CV uploaded, selected, and saved successfully!', 'success');
+          })
+          .catch((err) => {
+            console.error('Auto-save failed:', err);
+            showToast('CV uploaded but failed to auto-save. Please click Save Changes.', 'error');
+          });
+        return updated;
+      });
+
       setCvSourceType('library');
-      showToast('CV uploaded and selected', 'success');
     } catch (err) {
       console.error('CV upload error:', err);
       showToast(err instanceof Error ? err.message : 'Failed to upload CV', 'error');
@@ -414,14 +429,44 @@ export default function AboutPageEditor() {
       <ImagePickerModal
         isOpen={showImagePicker}
         onClose={() => setShowImagePicker(false)}
-        onSelect={(url) => setContent({ ...content, heroImage: url })}
+        onSelect={(url) => {
+          setContent((prev) => {
+            const updated = { ...prev, heroImage: url };
+            const docRef = doc(db, 'pages', ABOUT_DOC_ID);
+            setDoc(docRef, updated)
+              .then(() => {
+                localStorage.setItem('vicky_about_content', JSON.stringify(updated));
+                showToast('Portrait image selected and saved successfully!', 'success');
+              })
+              .catch((err) => {
+                console.error('Auto-save failed:', err);
+                showToast('Image selected but failed to auto-save.', 'error');
+              });
+            return updated;
+          });
+        }}
         title="Select Portrait Image"
       />
 
       <ImagePickerModal
         isOpen={showCvPicker}
         onClose={() => setShowCvPicker(false)}
-        onSelect={(url) => setContent({ ...content, cvUrl: url })}
+        onSelect={(url) => {
+          setContent((prev) => {
+            const updated = { ...prev, cvUrl: url };
+            const docRef = doc(db, 'pages', ABOUT_DOC_ID);
+            setDoc(docRef, updated)
+              .then(() => {
+                localStorage.setItem('vicky_about_content', JSON.stringify(updated));
+                showToast('CV selected and saved successfully!', 'success');
+              })
+              .catch((err) => {
+                console.error('Auto-save failed:', err);
+                showToast('CV selected but failed to auto-save.', 'error');
+              });
+            return updated;
+          });
+        }}
         title="Select CV PDF File"
       />
     </div>

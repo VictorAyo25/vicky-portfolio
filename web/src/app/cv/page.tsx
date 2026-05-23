@@ -21,13 +21,18 @@ export default function CVPage() {
         const snap = await getDoc(docRef);
         if (snap.exists()) {
           const data = snap.data();
-          setCvUrl(data.cvUrl || DEFAULT_CV_URL);
+          const url = data.cvUrl || '';
+          if (url && url !== '/Victoria_Odueso_Resume.pdf') {
+            setCvUrl(url);
+          } else {
+            setCvUrl('');
+          }
         } else {
-          setCvUrl(DEFAULT_CV_URL);
+          setCvUrl('');
         }
       } catch (err) {
         console.error('Failed to load CV url:', err);
-        setCvUrl(DEFAULT_CV_URL);
+        setCvUrl('');
       } finally {
         setLoading(false);
       }
