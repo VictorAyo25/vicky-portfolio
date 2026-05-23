@@ -1,19 +1,19 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { LogOut, FileText, LayoutDashboard, Trash, Home, Image as ImageIcon, Settings, ChevronRight, Menu, X, BarChart3, Sun, Moon } from 'lucide-react';
+import { LogOut, FileText, LayoutDashboard, Trash, Home, Image as ImageIcon, Settings, ChevronRight, Menu, X, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useTheme } from '@/context/ThemeContext';
+
 
 export default function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuth();
   const pathname = usePathname();
   const [postsOpen, setPostsOpen] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
+
 
   const isActive = (path: string) => pathname === path;
 
@@ -115,21 +115,13 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
         <div className="p-4 border-t border-[#2F2A26] bg-[#0F0E0D] shrink-0">
           <div className="flex items-center justify-between mb-3 px-2">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-[#2F2A26] flex items-center justify-center text-xs font-bold text-[#C5A059]">VO</div>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-[#2F2A26] flex items-center justify-center text-xs font-bold text-[#C5A059] shrink-0">VO</div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-white truncate">{user?.email}</p>
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest">Administrator</p>
               </div>
             </div>
-            
-            <button
-              onClick={toggleTheme}
-              className="hidden md:block p-1.5 text-gray-400 hover:text-[#C5A059] transition-colors focus:outline-none rounded-lg"
-              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            >
-              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
           </div>
           <button onClick={signOut} className="flex w-full items-center justify-center gap-2 px-4 py-2 rounded border border-[#2F2A26] text-xs font-bold uppercase tracking-wide text-gray-400 hover:text-white hover:bg-[#2F2A26] transition-colors">
             <LogOut size={14} /> Log Out
@@ -147,13 +139,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
             </button>
             <span className="font-serif text-lg text-[#C5A059] tracking-wide">Victoria</span>
           </div>
-          <button
-            onClick={toggleTheme}
-            className="p-2 text-gray-400 hover:text-[#C5A059] transition-colors focus:outline-none"
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+
         </div>
         <div className="min-h-[calc(100vh-52px)] md:min-h-screen">
           {children}
