@@ -105,7 +105,7 @@ export default function CVPage() {
             <p className="text-gray-400 text-sm">CV document is currently unavailable.</p>
           </div>
         ) : (
-          <div className="w-full flex-1 flex flex-col bg-[#141210] border border-[#2F2A26] rounded-2xl overflow-hidden shadow-2xl min-h-[70vh] md:min-h-[80vh]">
+          <div className="w-full bg-[#141210] border border-[#2F2A26] rounded-2xl overflow-hidden shadow-2xl">
             
             {/* Helper Alert Banner */}
             <div className="bg-[#191614] border-b border-[#2F2A26] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
@@ -124,12 +124,12 @@ export default function CVPage() {
             </div>
 
             {/* Document Frame */}
-            <div className="flex-1 w-full bg-[#191614] relative">
+            <div className="w-full h-[76vh] md:h-[82vh] bg-[#191614] relative">
               {isMobile ? (
                 // Google Docs Viewer for seamless mobile reading
                 <iframe
                   src={viewerUrl}
-                  className="w-full h-full min-h-[60vh] md:min-h-[70vh] border-none"
+                  className="w-full h-full border-none"
                   title="Victoria Odueso CV"
                 />
               ) : (
@@ -137,7 +137,7 @@ export default function CVPage() {
                 <object
                   data={cvUrl}
                   type="application/pdf"
-                  className="w-full h-full min-h-[60vh] md:min-h-[70vh]"
+                  className="w-full h-full border-none"
                 >
                   <iframe
                     src={viewerUrl}
