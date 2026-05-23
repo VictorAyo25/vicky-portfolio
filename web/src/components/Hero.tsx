@@ -27,7 +27,6 @@ const defaultContent: HomeContent = {
 
 export default function Hero() {
   const [content, setContent] = useState<HomeContent>(defaultContent);
-  const [cvUrl, setCvUrl] = useState<string>('/Victoria_Odueso_Resume.pdf');
 
   useEffect(() => {
     // Sync with localStorage instantly on mount to prevent stale flash
@@ -37,17 +36,6 @@ export default function Hero() {
         setContent(JSON.parse(cachedHome));
       } catch (err) {
         console.error('Failed to parse cached home content:', err);
-      }
-    }
-    const cachedAbout = localStorage.getItem('vicky_about_content');
-    if (cachedAbout) {
-      try {
-        const aboutData = JSON.parse(cachedAbout);
-        if (aboutData.cvUrl) {
-          setCvUrl(aboutData.cvUrl);
-        }
-      } catch (err) {
-        console.error('Failed to parse cached about content:', err);
       }
     }
 
@@ -64,9 +52,6 @@ export default function Hero() {
         }
         if (aboutSnap.exists()) {
           const aboutData = aboutSnap.data();
-          if (aboutData?.cvUrl) {
-            setCvUrl(aboutData.cvUrl);
-          }
           localStorage.setItem('vicky_about_content', JSON.stringify(aboutData));
         }
       } catch (err) {

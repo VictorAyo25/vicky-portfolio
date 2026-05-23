@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 const ABOUT_DOC_ID = 'page_about';
-const DEFAULT_CV_URL = '/Victoria_Odueso_Resume.pdf';
+const DEFAULT_CV_URL = '';
 
 export default function CVPage() {
   const [cvUrl, setCvUrl] = useState<string>('');
@@ -82,7 +82,7 @@ export default function CVPage() {
           {!loading && cvUrl && (
             <a
               href={cvUrl}
-              download="Victoria_Odueso_Resume.pdf"
+              download="Victoria_Odueso_CV.pdf"
               className="flex items-center gap-2 bg-[#C5A059] text-[#0F0E0D] px-5 py-2.5 rounded-full font-bold tracking-[0.15em] text-[10px] uppercase hover:bg-[#d4b06a] active:scale-[0.97] transition-all duration-200"
             >
               <Download size={14} />

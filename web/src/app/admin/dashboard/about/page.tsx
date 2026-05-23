@@ -31,7 +31,7 @@ const defaultContent: AboutContent = {
 <p>If you require an authoritative blog piece, magnetic website copy, or a tightly woven editorial strategy, I am here to translate your vision into clear, results-driven content that ranks high and resonates deeply with your audience.</p>`,
   ctaText: "Let's Work Together",
   heroImage: '/images/vickyimg1.jpg',
-  cvUrl: '/Victoria_Odueso_Resume.pdf',
+  cvUrl: '',
 };
 
 export default function AboutPageEditor() {
