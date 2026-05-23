@@ -9,7 +9,6 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import RichTextEditor from '@/components/admin/RichTextEditor';
 import ImagePickerModal from '@/components/admin/ImagePickerModal';
 import { uploadToCloudinary } from '@/lib/cloudinary';
-import { uploadToFirebaseStorage } from '@/lib/firebaseStorage';
 
 const ABOUT_DOC_ID = 'page_about';
 
@@ -59,22 +58,22 @@ export default function AboutPageEditor() {
     setCvUploading(true);
     setCvUploadProgress(0);
     try {
-      const timestamp = Date.now();
-      const storagePath = `cv/victoria_odueso_cv_${timestamp}.pdf`;
-      const downloadUrl = await uploadToFirebaseStorage(file, storagePath, (p) => setCvUploadProgress(p));
-
-      const mediaId = `cv_${timestamp}`;
+      const result = await uploadToCloudinary(file, (p) => setCvUploadProgress(p));
+      const mediaId = `${result.publicId.replace(/\//g, '_')}_${Date.now()}`;
       await setDoc(doc(db, 'media', mediaId), {
-        name: file.name,
-        url: downloadUrl,
-        publicId: storagePath,
-        size: file.size,
-        format: 'pdf',
+        name: result.originalFilename,
+        url: result.url,
+        publicId: result.publicId,
+        size: result.bytes,
+        width: result.width,
+        height: result.height,
+        format: result.format,
         createdAt: new Date().toISOString()
       });
 
+      const newCvUrl = result.url;
       setContent((prev) => {
-        const updated = { ...prev, cvUrl: downloadUrl };
+        const updated = { ...prev, cvUrl: newCvUrl };
         const docRef = doc(db, 'pages', ABOUT_DOC_ID);
         setDoc(docRef, updated)
           .then(() => {

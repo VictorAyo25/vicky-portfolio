@@ -7,12 +7,10 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 const ABOUT_DOC_ID = 'page_about';
-const DEFAULT_CV_URL = '';
 
 export default function CVPage() {
   const [cvUrl, setCvUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     async function loadCvUrl() {
@@ -38,34 +36,7 @@ export default function CVPage() {
       }
     }
     loadCvUrl();
-
-    // Check if device is mobile
-    const checkDevice = () => {
-      setIsMobile(
-        window.innerWidth < 768 || 
-        /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-      );
-    };
-    checkDevice();
-    window.addEventListener('resize', checkDevice);
-    return () => window.removeEventListener('resize', checkDevice);
   }, []);
-
-  const getAbsoluteUrl = (url: string) => {
-    if (!url) return '';
-    if (url.startsWith('http')) return url;
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}${url}`;
-    }
-    return url;
-  };
-
-  const absoluteUrl = getAbsoluteUrl(cvUrl);
-  
-  // Use Google Docs Viewer for mobile device rendering to prevent direct download
-  const viewerUrl = absoluteUrl 
-    ? `https://docs.google.com/viewer?url=${encodeURIComponent(absoluteUrl)}&embedded=true` 
-    : '';
 
   return (
     <div className="min-h-screen bg-[#0F0E0D] text-white flex flex-col font-sans">
@@ -80,20 +51,13 @@ export default function CVPage() {
             <span>Back to Site</span>
           </Link>
           
-          <h1 className="hidden md:block font-serif text-sm tracking-[0.15em] text-[#F3F4F6] uppercase">
-            Victoria Odueso — CV
+          <h1 className="font-serif text-sm tracking-[0.15em] text-[#F3F4F6] uppercase">
+            Victoria Odueso
           </h1>
 
-          {!loading && cvUrl && (
-            <a
-              href={cvUrl}
-              download="Victoria_Odueso_CV.pdf"
-              className="flex items-center gap-2 bg-[#C5A059] text-[#0F0E0D] px-5 py-2.5 rounded-full font-bold tracking-[0.15em] text-[10px] uppercase hover:bg-[#d4b06a] active:scale-[0.97] transition-all duration-200"
-            >
-              <Download size={14} />
-              <span>Download PDF</span>
-            </a>
-          )}
+          <div className="w-[100px] md:w-[120px] text-right text-xs text-gray-500 font-medium tracking-wider hidden sm:block">
+            Curriculum Vitae
+          </div>
         </div>
       </header>
 
@@ -105,52 +69,55 @@ export default function CVPage() {
             <p className="text-gray-400 text-sm tracking-wide">Loading CV Document...</p>
           </div>
         ) : !cvUrl ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-            <FileText className="w-12 h-12 text-[#C5A059] opacity-50" />
-            <p className="text-gray-400 text-sm">CV document is currently unavailable.</p>
+          <div className="flex flex-col items-center justify-center gap-4 py-20 text-center max-w-md bg-[#141210] border border-[#2F2A26] rounded-2xl p-8 shadow-2xl">
+            <FileText className="w-12 h-12 text-red-500/60 mx-auto" />
+            <div className="space-y-1">
+              <h2 className="font-serif text-lg text-white">Document Unavailable</h2>
+              <p className="text-gray-400 text-sm">The CV document has not been uploaded yet or the link is invalid.</p>
+            </div>
+            <Link 
+              href="/"
+              className="inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.15em] border border-[#2F2A26] text-gray-300 hover:text-white px-6 py-2.5 rounded-full mt-2 hover:border-[#C5A059]/40 transition-all"
+            >
+              Return Home
+            </Link>
           </div>
         ) : (
-          <div className="w-full bg-[#141210] border border-[#2F2A26] rounded-2xl overflow-hidden shadow-2xl">
+          <div className="max-w-md w-full bg-[#141210] border border-[#2F2A26] rounded-2xl p-8 md:p-10 shadow-2xl text-center flex flex-col items-center gap-6 my-auto">
+            <div className="w-16 h-16 rounded-full bg-[#2F2A26]/40 flex items-center justify-center text-[#C5A059] border border-[#C5A059]/20">
+              <FileText size={32} />
+            </div>
             
-            {/* Helper Alert Banner */}
-            <div className="bg-[#191614] border-b border-[#2F2A26] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
-              <span className="flex items-center gap-2">
-                <FileText size={14} className="text-[#C5A059]" />
-                Viewing document online. Use the button in the top right to download.
-              </span>
+            <div className="space-y-2">
+              <h2 className="font-serif text-2xl text-[#F3F4F6] tracking-wide">Curriculum Vitae</h2>
+              <p className="text-gray-400 text-sm">Victoria Odueso — Writer &amp; Content Strategist</p>
+            </div>
+
+            <div className="w-full h-[1px] bg-[#2F2A26]" />
+
+            <p className="text-xs text-gray-400 leading-relaxed max-w-[300px]">
+              You can view the document directly in your browser or download a copy to your device.
+            </p>
+
+            <div className="w-full flex flex-col gap-3">
               <a
                 href={cvUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#C5A059] hover:underline flex items-center gap-1 font-medium"
+                className="w-full flex items-center justify-center gap-2 bg-[#C5A059] text-[#0F0E0D] py-3.5 rounded-full font-bold tracking-[0.15em] text-xs uppercase hover:bg-[#d4b06a] active:scale-[0.98] transition-all duration-200"
               >
-                Open Direct PDF Link <ExternalLink size={12} />
+                <ExternalLink size={16} />
+                <span>Open &amp; View CV</span>
               </a>
-            </div>
 
-            {/* Document Frame */}
-            <div className="w-full h-[76vh] md:h-[82vh] bg-[#191614] relative">
-              {isMobile ? (
-                // Google Docs Viewer for seamless mobile reading
-                <iframe
-                  src={viewerUrl}
-                  className="w-full h-full border-none"
-                  title="Victoria Odueso CV"
-                />
-              ) : (
-                // Desktop native browser PDF renderer
-                <object
-                  data={cvUrl}
-                  type="application/pdf"
-                  className="w-full h-full border-none"
-                >
-                  <iframe
-                    src={viewerUrl}
-                    className="w-full h-full border-none"
-                    title="Victoria Odueso CV"
-                  />
-                </object>
-              )}
+              <a
+                href={cvUrl}
+                download="Victoria_Odueso_CV.pdf"
+                className="w-full flex items-center justify-center gap-2 border border-[#2F2A26] hover:border-[#C5A059]/40 text-gray-300 hover:text-white py-3.5 rounded-full font-bold tracking-[0.15em] text-xs uppercase active:scale-[0.98] transition-all duration-200"
+              >
+                <Download size={16} />
+                <span>Download CV</span>
+              </a>
             </div>
           </div>
         )}
