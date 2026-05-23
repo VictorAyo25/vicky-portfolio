@@ -80,12 +80,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Generate a deterministic daily document ID using visitorId to ensure uniqueness per 24 hours (calendar day)
-    // If same device visits 1 million times, it will just overwrite/update the single daily document, keeping count as 1.
-    const today = new Date().toISOString().split('T')[0];
-    const docId = visitorId ? `${visitorId}_${today}` : undefined;
-
-    const recordData = {
+    // Always create a new document to preserve all history, exact times, and paths
+    await adminDb.collection('analytics_visitors').add({
+      visitorId: visitorId || '',
       ip,
       city,
       country,
@@ -93,13 +90,7 @@ export async function POST(req: NextRequest) {
       page: page || '/',
       userAgent: req.headers.get('user-agent') || '',
       timestamp: FieldValue.serverTimestamp(),
-    };
-
-    if (docId) {
-      await adminDb.collection('analytics_visitors').doc(docId).set(recordData, { merge: true });
-    } else {
-      await adminDb.collection('analytics_visitors').add(recordData);
-    }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

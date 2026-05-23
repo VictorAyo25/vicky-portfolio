@@ -13,6 +13,8 @@ interface VisitorRecord {
   region: string;
   page: string;
   timestamp: { seconds: number } | null;
+  visitorId?: string;
+  ip?: string;
 }
 
 interface LocationCount {
@@ -47,52 +49,79 @@ export default function AnalyticsPage() {
     fetchVisitors();
   }, []);
 
+  // Filter out records without valid geolocations
   const filteredVisitors = useMemo(() => {
     return visitors.filter(
       (v) => v.country && v.country !== 'Unknown' && v.city && v.city !== 'Unknown'
     );
   }, [visitors]);
 
-  const totalVisitors = filteredVisitors.length;
+  // Compute stats based on UNIQUE visitor sessions (visitorId || ip || id)
+  const totalVisitors = useMemo(() => {
+    const uniqueIds = new Set(filteredVisitors.map((v) => v.visitorId || v.ip || v.id));
+    return uniqueIds.size;
+  }, [filteredVisitors]);
 
   const countryStats = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, Set<string>>();
     filteredVisitors.forEach((v) => {
       const key = v.country || 'Unknown';
-      map.set(key, (map.get(key) || 0) + 1);
+      const id = v.visitorId || v.ip || v.id;
+      if (!map.has(key)) map.set(key, new Set());
+      map.get(key)!.add(id);
     });
-    const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
-    return sorted.map(([name, count]) => ({
+    const sorted = [...map.entries()].map(([name, idSet]) => ({
       name,
-      count,
-      percentage: totalVisitors > 0 ? Math.round((count / totalVisitors) * 100) : 0,
+      count: idSet.size,
+    })).sort((a, b) => b.count - a.count);
+    
+    return sorted.map((item) => ({
+      ...item,
+      percentage: totalVisitors > 0 ? Math.round((item.count / totalVisitors) * 100) : 0,
     }));
   }, [filteredVisitors, totalVisitors]);
 
   const cityStats = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, Set<string>>();
     filteredVisitors.forEach((v) => {
       const key = v.city && v.city !== 'Unknown' ? `${v.city}, ${v.country || 'Unknown'}` : 'Unknown';
-      map.set(key, (map.get(key) || 0) + 1);
+      const id = v.visitorId || v.ip || v.id;
+      if (!map.has(key)) map.set(key, new Set());
+      map.get(key)!.add(id);
     });
-    const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
-    return sorted.slice(0, 20).map(([name, count]) => ({
+    const sorted = [...map.entries()].map(([name, idSet]) => ({
       name,
-      count,
-      percentage: totalVisitors > 0 ? Math.round((count / totalVisitors) * 100) : 0,
+      count: idSet.size,
+    })).sort((a, b) => b.count - a.count);
+    
+    return sorted.slice(0, 20).map((item) => ({
+      ...item,
+      percentage: totalVisitors > 0 ? Math.round((item.count / totalVisitors) * 100) : 0,
     }));
   }, [filteredVisitors, totalVisitors]);
 
   const uniqueCountries = new Set(filteredVisitors.map((v) => v.country).filter(Boolean)).size;
   const uniqueCities = new Set(filteredVisitors.map((v) => v.city).filter(Boolean).filter((c) => c !== 'Unknown')).size;
 
-  // Recent visitors (last 24h)
+  // Recent visitors (last 24h based on unique visitor sessions)
   const last24h = useMemo(() => {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    return filteredVisitors.filter((v) => {
+    const activeIn24h = filteredVisitors.filter((v) => {
       const ts = v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0;
       return ts >= cutoff;
-    }).length;
+    });
+    return new Set(activeIn24h.map((v) => v.visitorId || v.ip || v.id)).size;
+  }, [filteredVisitors]);
+
+  // Feed of the 10 most recent visitor documents
+  const recentVisits = useMemo(() => {
+    return [...filteredVisitors]
+      .sort((a, b) => {
+        const tsA = a.timestamp?.seconds || 0;
+        const tsB = b.timestamp?.seconds || 0;
+        return tsB - tsA;
+      })
+      .slice(0, 10);
   }, [filteredVisitors]);
 
   if (loading) {
@@ -142,43 +171,87 @@ export default function AnalyticsPage() {
             <p className="text-gray-600 text-sm mt-2">Data will appear as visitors browse your site.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Countries */}
-            <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
-                  <Globe size={20} className="text-[#C5A059]" />
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Countries */}
+              <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
+                    <Globe size={20} className="text-[#C5A059]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif text-[#F3F4F6]">Visitors by Country</h2>
+                    <p className="text-xs text-gray-500">{uniqueCountries} countries reached</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-serif text-[#F3F4F6]">Visitors by Country</h2>
-                  <p className="text-xs text-gray-500">{uniqueCountries} countries reached</p>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                  {countryStats.map((item, i) => (
+                    <LocationRow key={item.name} item={item} index={i} />
+                  ))}
                 </div>
               </div>
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                {countryStats.map((item, i) => (
-                  <LocationRow key={item.name} item={item} index={i} />
-                ))}
+
+              {/* Cities */}
+              <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
+                    <MapPin size={20} className="text-[#C5A059]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif text-[#F3F4F6]">Visitors by City</h2>
+                    <p className="text-xs text-gray-500">Top {Math.min(cityStats.length, 20)} cities</p>
+                  </div>
+                </div>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                  {cityStats.map((item, i) => (
+                    <LocationRow key={item.name} item={item} index={i} />
+                  ))}
+                  {cityStats.length === 0 && (
+                    <p className="text-gray-500 text-sm text-center py-8">No city data available yet.</p>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Cities */}
+            {/* Recent Activity Feed */}
             <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
-                  <MapPin size={20} className="text-[#C5A059]" />
+                  <TrendingUp size={20} className="text-[#C5A059]" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-serif text-[#F3F4F6]">Visitors by City</h2>
-                  <p className="text-xs text-gray-500">Top {Math.min(cityStats.length, 20)} cities</p>
+                  <h2 className="text-lg font-serif text-[#F3F4F6]">Recent Activity</h2>
+                  <p className="text-xs text-gray-500 font-sans">Real-time log of the latest visits</p>
                 </div>
               </div>
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                {cityStats.map((item, i) => (
-                  <LocationRow key={item.name} item={item} index={i} />
-                ))}
-                {cityStats.length === 0 && (
-                  <p className="text-gray-500 text-sm text-center py-8">No city data available yet.</p>
-                )}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse font-sans">
+                  <thead>
+                    <tr className="border-b border-[#2F2A26] text-xs uppercase tracking-widest text-gray-500">
+                      <th className="py-3 px-4 font-semibold">Time</th>
+                      <th className="py-3 px-4 font-semibold">Location</th>
+                      <th className="py-3 px-4 font-semibold">Page Path</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2F2A26]/50">
+                    {recentVisits.map((v) => {
+                      const flag = getFlagForName(v.country);
+                      const timeStr = formatVisitTime(v.timestamp);
+                      return (
+                        <tr key={v.id} className="text-sm hover:bg-[#201C1A]/50 transition-colors">
+                          <td className="py-3.5 px-4 text-gray-400 font-mono whitespace-nowrap">{timeStr}</td>
+                          <td className="py-3.5 px-4 text-gray-300">
+                            <span className="text-base mr-2 select-none" role="img">
+                              {flag}
+                            </span>
+                            {v.city && v.city !== 'Unknown' ? `${v.city}, ${v.country}` : v.country}
+                          </td>
+                          <td className="py-3.5 px-4 text-[#C5A059] font-mono">{v.page}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -422,6 +495,23 @@ function getFlagForName(name: string): string {
   const parts = name.split(', ');
   const countryName = parts.length > 1 ? parts[parts.length - 1] : name;
   return getFlagEmoji(countryName.trim());
+}
+
+function formatVisitTime(timestamp: { seconds: number } | null): string {
+  if (!timestamp || !timestamp.seconds) return 'Just now';
+  const ms = timestamp.seconds * 1000;
+  const diff = Date.now() - ms;
+  
+  if (diff < 60000) return 'Just now';
+  
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  
+  const date = new Date(ms);
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function LocationRow({ item, index }: { item: LocationCount; index: number }) {
