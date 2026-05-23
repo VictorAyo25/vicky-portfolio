@@ -144,7 +144,9 @@ export default function AboutPage() {
             >
               <a
                 href={content.cvUrl || "/Victoria_Odueso_Resume.pdf"}
-                download="Victoria_Odueso_Resume.pdf"
+                download={content.cvUrl?.startsWith('http') ? undefined : "Victoria_Odueso_Resume.pdf"}
+                target={content.cvUrl?.startsWith('http') ? "_blank" : undefined}
+                rel={content.cvUrl?.startsWith('http') ? "noopener noreferrer" : undefined}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#C5A059] text-[#0F0E0D] px-7 py-3.5 rounded-full font-bold tracking-[0.15em] text-[11px] uppercase hover:bg-[#d4b06a] active:scale-[0.97] transition-all duration-200"
               >
                 <Download size={15} />
@@ -220,7 +222,9 @@ export default function AboutPage() {
                 </Link>
                 <a
                   href={content.cvUrl || "/Victoria_Odueso_Resume.pdf"}
-                  download="Victoria_Odueso_Resume.pdf"
+                  download={content.cvUrl?.startsWith('http') ? undefined : "Victoria_Odueso_Resume.pdf"}
+                  target={content.cvUrl?.startsWith('http') ? "_blank" : undefined}
+                  rel={content.cvUrl?.startsWith('http') ? "noopener noreferrer" : undefined}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-[#2F2A26] text-gray-400 px-7 py-3.5 rounded-full font-bold tracking-[0.15em] text-[11px] uppercase hover:border-[#C5A059] hover:text-[#C5A059] active:scale-[0.97] transition-all duration-200"
                 >
                   <Download size={14} />

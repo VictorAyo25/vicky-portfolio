@@ -153,7 +153,9 @@ export default function Hero() {
         >
           <a
             href={cvUrl}
-            download="Victoria_Odueso_Resume.pdf"
+            download={cvUrl.startsWith('http') ? undefined : "Victoria_Odueso_Resume.pdf"}
+            target={cvUrl.startsWith('http') ? "_blank" : undefined}
+            rel={cvUrl.startsWith('http') ? "noopener noreferrer" : undefined}
             className="group flex items-center gap-2 text-gray-500 hover:text-gold transition-colors duration-300 text-[11px] md:text-xs font-sans tracking-wide"
           >
             <Download size={14} className="group-hover:translate-y-0.5 transition-transform" />
