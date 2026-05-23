@@ -23,7 +23,7 @@ function isPrivateIp(ip: string): boolean {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { page } = body;
+    const { page, visitorId } = body;
 
     // Get visitor IP from headers (works behind proxies/CDN)
     const ip =
@@ -31,12 +31,38 @@ export async function POST(req: NextRequest) {
       req.headers.get('x-real-ip') ||
       'unknown';
 
-    // Resolve geolocation from IP using ipapi.co (free, no key, 45 req/min)
+    // 1. Try Vercel Edge Geolocation headers first (extremely fast, zero-rate-limits, 100% accurate in production)
     let city = 'Unknown';
     let country = 'Unknown';
     let region = 'Unknown';
 
-    if (ip && ip !== 'unknown' && !isPrivateIp(ip)) {
+    const vercelCity = req.headers.get('x-vercel-ip-city');
+    const vercelCountryCode = req.headers.get('x-vercel-ip-country');
+    const vercelRegion = req.headers.get('x-vercel-ip-country-region');
+
+    if (vercelCountryCode) {
+      try {
+        const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+        country = regionNames.of(vercelCountryCode) || vercelCountryCode;
+      } catch {
+        country = vercelCountryCode;
+      }
+    }
+
+    if (vercelCity) {
+      try {
+        city = decodeURIComponent(vercelCity);
+      } catch {
+        city = vercelCity;
+      }
+    }
+
+    if (vercelRegion) {
+      region = vercelRegion;
+    }
+
+    // 2. Fallback to ipapi.co if Vercel headers are missing (e.g. local development)
+    if ((country === 'Unknown' || city === 'Unknown') && ip && ip !== 'unknown' && !isPrivateIp(ip)) {
       try {
         const geoRes = await fetch(`https://ipapi.co/${ip}/json/`, {
           signal: AbortSignal.timeout(3000),
@@ -44,9 +70,9 @@ export async function POST(req: NextRequest) {
         if (geoRes.ok) {
           const geo = await geoRes.json();
           if (!geo.error) {
-            city = geo.city || 'Unknown';
-            country = geo.country_name || 'Unknown';
-            region = geo.region || 'Unknown';
+            city = geo.city || city;
+            country = geo.country_name || country;
+            region = geo.region || region;
           }
         }
       } catch {
@@ -54,8 +80,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Log to Firestore using Admin SDK
-    await adminDb.collection('analytics_visitors').add({
+    // Generate a deterministic daily document ID using visitorId to ensure uniqueness per 24 hours (calendar day)
+    // If same device visits 1 million times, it will just overwrite/update the single daily document, keeping count as 1.
+    const today = new Date().toISOString().split('T')[0];
+    const docId = visitorId ? `${visitorId}_${today}` : undefined;
+
+    const recordData = {
       ip,
       city,
       country,
@@ -63,7 +93,13 @@ export async function POST(req: NextRequest) {
       page: page || '/',
       userAgent: req.headers.get('user-agent') || '',
       timestamp: FieldValue.serverTimestamp(),
-    });
+    };
+
+    if (docId) {
+      await adminDb.collection('analytics_visitors').doc(docId).set(recordData, { merge: true });
+    } else {
+      await adminDb.collection('analytics_visitors').add(recordData);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

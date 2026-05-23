@@ -28,11 +28,23 @@ export function usePageTracking() {
     firedForPath.current = pathname;
     recentlyTracked.set(pathname, Date.now());
 
+    // Get or generate a persistent visitor ID for deduplication
+    let visitorId = '';
+    try {
+      visitorId = localStorage.getItem('vicky_visitor_id') || '';
+      if (!visitorId) {
+        visitorId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('vicky_visitor_id', visitorId);
+      }
+    } catch {
+      // LocalStorage might be disabled in private browsing
+    }
+
     // Fire-and-forget tracking call
     fetch('/api/analytics/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ page: pathname }),
+      body: JSON.stringify({ page: pathname, visitorId }),
     }).catch(() => {
       // Silently fail — analytics should never break the site
     });
