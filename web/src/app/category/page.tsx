@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, ArrowRight, ChevronDown, Sparkles } from 'lucide-react';
+import { Loader2, ArrowRight, ChevronDown, Compass } from 'lucide-react';
 import { fetchTaxonomy, Taxonomy } from '@/lib/taxonomy';
 
 export default function CategoriesIndexPage() {
@@ -109,7 +109,7 @@ export default function CategoriesIndexPage() {
                           >
                             <div className="px-6 pb-6 md:px-7 md:pb-7 border-t border-[#2F2A26] bg-gradient-to-b from-[#1c1714] to-[#171310]">
                               <div className="flex items-center gap-2 text-[#C5A059] text-xs uppercase tracking-widest mt-4 mb-4">
-                                <Sparkles size={13} />
+                                <Compass size={13} />
                                 Explore this category
                               </div>
 
