@@ -20,8 +20,39 @@ function isPrivateIp(ip: string): boolean {
   );
 }
 
+// Detect bots, crawlers, and other non-human automated traffic
+function isBot(userAgent: string): boolean {
+  if (!userAgent) return false;
+  const ua = userAgent.toLowerCase();
+  const botKeywords = [
+    'bot',
+    'spider',
+    'crawler',
+    'crawling',
+    'lighthouse',
+    'google-read-aloud',
+    'google-weblight',
+    'headless',
+    'inspect',
+    'prerender',
+    'axios',
+    'node-fetch',
+    'got',
+    'python-requests',
+    'curl',
+    'wget',
+    'http-client',
+  ];
+  return botKeywords.some((keyword) => ua.includes(keyword));
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const userAgent = req.headers.get('user-agent') || '';
+    if (isBot(userAgent)) {
+      return NextResponse.json({ success: true, message: 'Ignored automated traffic' });
+    }
+
     const body = await req.json();
     const { page, visitorId } = body;
 
