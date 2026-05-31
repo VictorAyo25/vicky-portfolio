@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Download, Loader2, FileText } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { trackEvent } from '@/lib/analytics';
 
 const ABOUT_DOC_ID = 'page_about';
 
@@ -29,6 +30,7 @@ export default function CVPage() {
               : url;
             
             // Auto trigger download
+            trackEvent('cv_auto_download');
             const a = document.createElement('a');
             a.href = downloadUrl;
             a.download = 'Victoria_Odueso_CV.pdf';
@@ -119,6 +121,7 @@ export default function CVPage() {
                 download="Victoria_Odueso_CV.pdf"
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackEvent('cv_manual_download')}
                 className="w-full flex items-center justify-center gap-2 bg-[#C5A059] text-[#0F0E0D] py-3.5 rounded-full font-bold tracking-[0.15em] text-xs uppercase hover:bg-[#d4b06a] active:scale-[0.98] transition-all duration-200 cursor-pointer"
               >
                 <Download size={16} />

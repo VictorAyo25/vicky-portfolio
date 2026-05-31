@@ -2,9 +2,9 @@
 
 import { motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { useEffect, useState, useMemo } from 'react';
-import { Globe, MapPin, Users, TrendingUp } from 'lucide-react';
+import { Globe, MapPin, Users, TrendingUp, FileText, Eye, Share2, Laptop, CheckCircle } from 'lucide-react';
 
 interface VisitorRecord {
   id: string;
@@ -14,7 +14,13 @@ interface VisitorRecord {
   page: string;
   timestamp: { seconds: number } | null;
   visitorId?: string;
+  visitorName?: string;
   ip?: string;
+  referrer?: string;
+  eventType?: string;
+  eventName?: string;
+  eventMetadata?: any;
+  userAgent?: string;
 }
 
 interface LocationCount {
@@ -26,12 +32,17 @@ interface LocationCount {
 export default function AnalyticsPage() {
   const [visitors, setVisitors] = useState<VisitorRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('7d');
 
   useEffect(() => {
     async function fetchVisitors() {
       try {
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - 30);
+
         const q = query(
           collection(db, 'analytics_visitors'),
+          where('timestamp', '>=', cutoffDate),
           orderBy('timestamp', 'desc')
         );
         const snapshot = await getDocs(q);
@@ -49,22 +60,35 @@ export default function AnalyticsPage() {
     fetchVisitors();
   }, []);
 
-  // Filter out records without valid geolocations
-  const filteredVisitors = useMemo(() => {
+  // Filter out records without valid geolocations first
+  const geoFilteredVisitors = useMemo(() => {
     return visitors.filter(
       (v) => v.country && v.country !== 'Unknown' && v.city && v.city !== 'Unknown'
     );
   }, [visitors]);
 
+  // Then filter by selected time range
+  const filteredVisitors = useMemo(() => {
+    const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 7 * 24 : 30 * 24;
+    const cutoff = Date.now() - hours * 60 * 60 * 1000;
+    return geoFilteredVisitors.filter((v) => {
+      const ts = v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0;
+      return ts >= cutoff;
+    });
+  }, [geoFilteredVisitors, timeRange]);
+
   // Compute stats based on UNIQUE visitor sessions (visitorId || ip || id)
   const totalVisitors = useMemo(() => {
-    const uniqueIds = new Set(filteredVisitors.map((v) => v.visitorId || v.ip || v.id));
+    // Only unique visitors for page views
+    const pageViewsOnly = filteredVisitors.filter(v => !v.eventType || v.eventType === 'page_view');
+    const uniqueIds = new Set(pageViewsOnly.map((v) => v.visitorId || v.ip || v.id));
     return uniqueIds.size;
   }, [filteredVisitors]);
 
   const countryStats = useMemo(() => {
+    const pageViewsOnly = filteredVisitors.filter(v => !v.eventType || v.eventType === 'page_view');
     const map = new Map<string, Set<string>>();
-    filteredVisitors.forEach((v) => {
+    pageViewsOnly.forEach((v) => {
       const key = v.country || 'Unknown';
       const id = v.visitorId || v.ip || v.id;
       if (!map.has(key)) map.set(key, new Set());
@@ -82,8 +106,9 @@ export default function AnalyticsPage() {
   }, [filteredVisitors, totalVisitors]);
 
   const cityStats = useMemo(() => {
+    const pageViewsOnly = filteredVisitors.filter(v => !v.eventType || v.eventType === 'page_view');
     const map = new Map<string, Set<string>>();
-    filteredVisitors.forEach((v) => {
+    pageViewsOnly.forEach((v) => {
       const key = v.city && v.city !== 'Unknown' ? `${v.city}, ${v.country || 'Unknown'}` : 'Unknown';
       const id = v.visitorId || v.ip || v.id;
       if (!map.has(key)) map.set(key, new Set());
@@ -100,28 +125,202 @@ export default function AnalyticsPage() {
     }));
   }, [filteredVisitors, totalVisitors]);
 
-  const uniqueCountries = new Set(filteredVisitors.map((v) => v.country).filter(Boolean)).size;
-  const uniqueCities = new Set(filteredVisitors.map((v) => v.city).filter(Boolean).filter((c) => c !== 'Unknown')).size;
+  const uniqueCountries = new Set(
+    filteredVisitors
+      .filter(v => !v.eventType || v.eventType === 'page_view')
+      .map((v) => v.country)
+      .filter(Boolean)
+  ).size;
+
+  const uniqueCities = new Set(
+    filteredVisitors
+      .filter(v => !v.eventType || v.eventType === 'page_view')
+      .map((v) => v.city)
+      .filter(Boolean)
+      .filter((c) => c !== 'Unknown')
+  ).size;
 
   // Recent visitors (last 24h based on unique visitor sessions)
   const last24h = useMemo(() => {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    const activeIn24h = filteredVisitors.filter((v) => {
+    const activeIn24h = geoFilteredVisitors.filter((v) => {
+      if (v.eventType && v.eventType !== 'page_view') return false;
       const ts = v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0;
       return ts >= cutoff;
     });
     return new Set(activeIn24h.map((v) => v.visitorId || v.ip || v.id)).size;
-  }, [filteredVisitors]);
+  }, [geoFilteredVisitors]);
 
   // Feed of the 10 most recent visitor documents
   const recentVisits = useMemo(() => {
     return [...filteredVisitors]
+      .filter(v => !v.eventType || v.eventType === 'page_view')
       .sort((a, b) => {
         const tsA = a.timestamp?.seconds || 0;
         const tsB = b.timestamp?.seconds || 0;
         return tsB - tsA;
       })
       .slice(0, 10);
+  }, [filteredVisitors]);
+
+  // Compute page view statistics
+  const pageViewStats = useMemo(() => {
+    const pageViewsOnly = filteredVisitors.filter(v => !v.eventType || v.eventType === 'page_view');
+    const map = new Map<string, number>();
+    pageViewsOnly.forEach((v) => {
+      const key = v.page || '/';
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    const sorted = [...map.entries()].map(([name, count]) => ({
+      name,
+      count,
+    })).sort((a, b) => b.count - a.count);
+
+    const totalViews = pageViewsOnly.length;
+
+    return sorted.slice(0, 10).map((item) => ({
+      ...item,
+      percentage: totalViews > 0 ? Math.round((item.count / totalViews) * 100) : 0,
+    }));
+  }, [filteredVisitors]);
+
+  // Compute Traffic Trend data (SVG Line Chart)
+  const trendData = useMemo(() => {
+    const buckets: { label: string; dateKey: string; count: number }[] = [];
+    const now = new Date();
+    const pageViewsOnly = filteredVisitors.filter(v => !v.eventType || v.eventType === 'page_view');
+
+    if (timeRange === '24h') {
+      for (let i = 23; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 60 * 60 * 1000);
+        const label = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
+        buckets.push({ label, dateKey, count: 0 });
+      }
+
+      pageViewsOnly.forEach((v) => {
+        if (!v.timestamp?.seconds) return;
+        const d = new Date(v.timestamp.seconds * 1000);
+        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
+        const bucket = buckets.find(b => b.dateKey === key);
+        if (bucket) bucket.count++;
+      });
+    } else {
+      const days = timeRange === '7d' ? 7 : 30;
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        const label = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const dateKey = d.toISOString().split('T')[0];
+        buckets.push({ label, dateKey, count: 0 });
+      }
+
+      pageViewsOnly.forEach((v) => {
+        if (!v.timestamp?.seconds) return;
+        const d = new Date(v.timestamp.seconds * 1000);
+        const key = d.toISOString().split('T')[0];
+        const bucket = buckets.find(b => b.dateKey === key);
+        if (bucket) bucket.count++;
+      });
+    }
+
+    return buckets;
+  }, [filteredVisitors, timeRange]);
+
+  // Compute Referrers (Traffic Sources)
+  const referrerStats = useMemo(() => {
+    const pageViewsOnly = filteredVisitors.filter(v => !v.eventType || v.eventType === 'page_view');
+    const map = new Map<string, number>();
+
+    pageViewsOnly.forEach((v) => {
+      const ref = v.referrer || 'Direct / Bookmark';
+      map.set(ref, (map.get(ref) || 0) + 1);
+    });
+
+    const sorted = [...map.entries()].map(([name, count]) => ({
+      name,
+      count,
+    })).sort((a, b) => b.count - a.count);
+
+    const totalViews = pageViewsOnly.length;
+
+    return sorted.slice(0, 10).map((item) => ({
+      ...item,
+      percentage: totalViews > 0 ? Math.round((item.count / totalViews) * 100) : 0,
+    }));
+  }, [filteredVisitors]);
+
+  // Client-side user agent parser
+  const parseUA = (uaString: string) => {
+    if (!uaString) return { device: 'Desktop', browser: 'Other' };
+    const ua = uaString.toLowerCase();
+    
+    let device = 'Desktop';
+    if (ua.includes('mobi') || ua.includes('android') || ua.includes('iphone') || ua.includes('ipod')) {
+      device = 'Mobile';
+    } else if (ua.includes('tablet') || ua.includes('ipad') || ua.includes('playbook') || ua.includes('silk')) {
+      device = 'Tablet';
+    }
+    
+    let browser = 'Other';
+    if (ua.includes('edg/')) {
+      browser = 'Edge';
+    } else if (ua.includes('chrome') || ua.includes('chromium')) {
+      browser = 'Chrome';
+    } else if (ua.includes('safari')) {
+      browser = 'Safari';
+    } else if (ua.includes('firefox')) {
+      browser = 'Firefox';
+    }
+    
+    return { device, browser };
+  };
+
+  // Compute Devices
+  const deviceStats = useMemo(() => {
+    const pageViewsOnly = filteredVisitors.filter(v => !v.eventType || v.eventType === 'page_view');
+    const map = new Map<string, number>();
+
+    pageViewsOnly.forEach((v) => {
+      const { device } = parseUA(v.userAgent || '');
+      map.set(device, (map.get(device) || 0) + 1);
+    });
+
+    const totalViews = pageViewsOnly.length;
+
+    return [...map.entries()].map(([name, count]) => ({
+      name,
+      count,
+      percentage: totalViews > 0 ? Math.round((count / totalViews) * 100) : 0,
+    })).sort((a, b) => b.count - a.count);
+  }, [filteredVisitors]);
+
+  // Compute Browsers
+  const browserStats = useMemo(() => {
+    const pageViewsOnly = filteredVisitors.filter(v => !v.eventType || v.eventType === 'page_view');
+    const map = new Map<string, number>();
+
+    pageViewsOnly.forEach((v) => {
+      const { browser } = parseUA(v.userAgent || '');
+      map.set(browser, (map.get(browser) || 0) + 1);
+    });
+
+    const totalViews = pageViewsOnly.length;
+
+    return [...map.entries()].map(([name, count]) => ({
+      name,
+      count,
+      percentage: totalViews > 0 ? Math.round((count / totalViews) * 100) : 0,
+    })).sort((a, b) => b.count - a.count);
+  }, [filteredVisitors]);
+
+  // Compute Conversions
+  const conversionStats = useMemo(() => {
+    const events = filteredVisitors.filter(v => v.eventType === 'event');
+    return {
+      cvDownloads: events.filter(e => e.eventName?.startsWith('cv_')).length,
+      contactFormSubmissions: events.filter(e => e.eventName === 'contact_form_submit').length,
+      totalEvents: events.length,
+    };
   }, [filteredVisitors]);
 
   if (loading) {
@@ -146,18 +345,37 @@ export default function AnalyticsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <header className="mb-10 rounded-2xl border border-[#2F2A26] bg-[#171311] px-6 py-6 lg:px-8 lg:py-7">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-[#C5A059] mb-2">Analytics</p>
-          <h1 className="text-3xl lg:text-4xl font-serif text-[#F3F4F6] tracking-tight mb-2">
-            Visitor Insights
-          </h1>
-          <p className="text-gray-400 font-sans">
-            See where your audience is viewing from — city and country breakdown.
-          </p>
+        <header className="mb-10 rounded-2xl border border-[#2F2A26] bg-[#171311] px-6 py-6 lg:px-8 lg:py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-[#C5A059] mb-2">Analytics</p>
+            <h1 className="text-3xl lg:text-4xl font-serif text-[#F3F4F6] tracking-tight mb-2">
+              Visitor Insights
+            </h1>
+            <p className="text-gray-400 font-sans">
+              See where your audience is viewing from — city and country breakdown.
+            </p>
+          </div>
+
+          {/* Time range toggle */}
+          <div className="flex items-center gap-1 bg-[#191614] border border-[#2F2A26] p-1 rounded-xl w-fit self-start sm:self-center shrink-0">
+            {(['24h', '7d', '30d'] as const).map((range) => (
+              <button
+                key={range}
+                onClick={() => setTimeRange(range)}
+                className={`px-4 py-2 text-xs font-sans rounded-lg transition-all duration-200 ${
+                  timeRange === range
+                    ? 'bg-[#C5A059] text-[#171311] font-semibold shadow-md'
+                    : 'text-gray-400 hover:text-[#F3F4F6] hover:bg-[#201C1A]'
+                }`}
+              >
+                {range === '24h' ? '24 Hours' : range === '7d' ? '7 Days' : '30 Days'}
+              </button>
+            ))}
+          </div>
         </header>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard icon={Users} label="Total Visitors" value={totalVisitors} />
           <StatCard icon={Globe} label="Countries" value={uniqueCountries} />
           <StatCard icon={MapPin} label="Cities" value={uniqueCities} />
@@ -172,6 +390,10 @@ export default function AnalyticsPage() {
           </div>
         ) : (
           <div className="space-y-8">
+            {/* SVG Trend Chart */}
+            <TrendChart data={trendData} />
+
+            {/* Countries and Cities Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Countries */}
               <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6">
@@ -213,45 +435,159 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            {/* Recent Activity Feed */}
-            <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
-                  <TrendingUp size={20} className="text-[#C5A059]" />
+            {/* Pages and Referrers Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Most Viewed Pages */}
+              <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
+                    <Eye size={20} className="text-[#C5A059]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif text-[#F3F4F6]">Most Viewed Pages</h2>
+                    <p className="text-xs text-gray-500">Top {Math.min(pageViewStats.length, 10)} pages by pageviews</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-serif text-[#F3F4F6]">Recent Activity</h2>
-                  <p className="text-xs text-gray-500 font-sans">Real-time log of the latest visits</p>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                  {pageViewStats.map((item, i) => (
+                    <PageRow key={item.name} item={item} index={i} />
+                  ))}
+                  {pageViewStats.length === 0 && (
+                    <p className="text-gray-500 text-sm text-center py-8">No pageview data available yet.</p>
+                  )}
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse font-sans">
-                  <thead>
-                    <tr className="border-b border-[#2F2A26] text-xs uppercase tracking-widest text-gray-500">
-                      <th className="py-3 px-4 font-semibold">Time</th>
-                      <th className="py-3 px-4 font-semibold">Location</th>
-                      <th className="py-3 px-4 font-semibold">Page Path</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#2F2A26]/50">
-                    {recentVisits.map((v) => {
-                      const flag = getFlagForName(v.country);
-                      const timeStr = formatVisitTime(v.timestamp);
-                      return (
-                        <tr key={v.id} className="text-sm hover:bg-[#201C1A]/50 transition-colors">
-                          <td className="py-3.5 px-4 text-gray-400 font-mono whitespace-nowrap">{timeStr}</td>
-                          <td className="py-3.5 px-4 text-gray-300">
-                            <span className="text-base mr-2 select-none" role="img">
-                              {flag}
-                            </span>
-                            {v.city && v.city !== 'Unknown' ? `${v.city}, ${v.country}` : v.country}
-                          </td>
-                          <td className="py-3.5 px-4 text-[#C5A059] font-mono">{v.page}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+
+              {/* Traffic Sources (Referrers) */}
+              <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
+                    <Share2 size={20} className="text-[#C5A059]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif text-[#F3F4F6]">Traffic Sources</h2>
+                    <p className="text-xs text-gray-500">Where your visitors find you</p>
+                  </div>
+                </div>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                  {referrerStats.map((item, i) => (
+                    <SimpleProgressRow key={item.name} name={item.name} count={item.count} percentage={item.percentage} index={i} icon={Share2} />
+                  ))}
+                  {referrerStats.length === 0 && (
+                    <p className="text-gray-500 text-sm text-center py-8">No referrer data available yet.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Conversions, User Agents and Recent Activity */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Panel: Conversions & Technology Stacked */}
+              <div className="space-y-6 flex flex-col justify-between">
+                {/* Conversions Card */}
+                <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6 flex-1">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
+                      <CheckCircle size={20} className="text-[#C5A059]" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-serif text-[#F3F4F6]">Goal Conversions</h2>
+                      <p className="text-xs text-gray-500">Visitor actions and goal completions</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-[#1D1917] border border-[#2F2A26] rounded-xl p-4 text-center">
+                      <p className="text-2xl font-serif text-[#C5A059] mb-1">{conversionStats.cvDownloads}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-500">CV Downloads</p>
+                    </div>
+                    <div className="bg-[#1D1917] border border-[#2F2A26] rounded-xl p-4 text-center">
+                      <p className="text-2xl font-serif text-[#C5A059] mb-1">{conversionStats.contactFormSubmissions}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-500">Contact Forms</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Device & Browser Breakdowns */}
+                <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6 flex-1">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
+                      <Laptop size={20} className="text-[#C5A059]" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-serif text-[#F3F4F6]">Devices &amp; Technology</h2>
+                      <p className="text-xs text-gray-500">System setups used to view your site</p>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-2 uppercase tracking-widest">Device Distribution</p>
+                      <div className="space-y-2">
+                        {deviceStats.map((item, i) => (
+                          <SimpleProgressRow key={item.name} name={item.name} count={item.count} percentage={item.percentage} index={i} icon={Laptop} showPercentOnly={true} />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-[#2F2A26]/50">
+                      <p className="text-xs text-gray-500 mb-2 uppercase tracking-widest">Top Browsers</p>
+                      <div className="space-y-2">
+                        {browserStats.map((item, i) => (
+                          <SimpleProgressRow key={item.name} name={item.name} count={item.count} percentage={item.percentage} index={i} icon={Laptop} showPercentOnly={true} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Activity Feed */}
+              <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
+                    <TrendingUp size={20} className="text-[#C5A059]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif text-[#F3F4F6]">Recent Activity</h2>
+                    <p className="text-xs text-gray-500 font-sans">Real-time log of the latest visits</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse font-sans">
+                    <thead>
+                      <tr className="border-b border-[#2F2A26] text-xs uppercase tracking-widest text-gray-500">
+                        <th className="py-3 px-4 font-semibold">Time</th>
+                        <th className="py-3 px-4 font-semibold">Location</th>
+                        <th className="py-3 px-4 font-semibold">Page Path</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2F2A26]/50">
+                      {recentVisits.map((v) => {
+                        const flag = getFlagForName(v.country);
+                        const timeStr = formatVisitTime(v.timestamp);
+                        return (
+                          <tr key={v.id} className="text-sm hover:bg-[#201C1A]/50 transition-colors">
+                            <td className="py-3.5 px-4 text-gray-400 font-mono whitespace-nowrap">{timeStr}</td>
+                            <td className="py-3.5 px-4 text-gray-300">
+                              <span className="text-base mr-2 select-none" role="img">
+                                {flag}
+                              </span>
+                              <span className="inline-flex flex-col">
+                                {v.visitorName && (
+                                  <span className="font-semibold text-[#C5A059] text-xs">
+                                    {v.visitorName}
+                                  </span>
+                                )}
+                                <span className={v.visitorName ? 'text-[10px] text-gray-500' : 'text-sm text-gray-300'}>
+                                  {v.city && v.city !== 'Unknown' ? `${v.city}, ${v.country}` : v.country}
+                                </span>
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-[#C5A059] font-mono">{v.page}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
@@ -275,6 +611,145 @@ function StatCard({ icon: Icon, label, value }: { icon: React.ElementType; label
       </div>
       <div className="text-3xl font-serif text-[#C5A059]">{value.toLocaleString()}</div>
     </motion.div>
+  );
+}
+
+function TrendChart({ data }: { data: { label: string; count: number }[] }) {
+  const maxVal = Math.max(...data.map(d => d.count), 2);
+  const width = 1000;
+  const height = 200;
+  const paddingX = 40;
+  const paddingY = 20;
+  
+  const chartWidth = width - paddingX * 2;
+  const chartHeight = height - paddingY * 2;
+  
+  const points = data.map((d, i) => {
+    const x = paddingX + (i / (data.length - 1)) * chartWidth;
+    const y = paddingY + chartHeight - (d.count / maxVal) * chartHeight;
+    return { x, y, label: d.label, count: d.count };
+  });
+  
+  const pathD = points.length > 0 
+    ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+    : '';
+    
+  const areaD = points.length > 0
+    ? `${pathD} L ${points[points.length - 1].x} ${height - paddingY} L ${points[0].x} ${height - paddingY} Z`
+    : '';
+
+  return (
+    <div className="bg-[#191614] border border-[#2F2A26] rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-lg font-serif text-[#F3F4F6]">Traffic Trend</h2>
+          <p className="text-xs text-gray-500">Visitor activity over time</p>
+        </div>
+      </div>
+      
+      <div className="w-full overflow-x-auto select-none">
+        <div className="min-w-[700px] h-[200px]">
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+            <defs>
+              <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#C5A059" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="#C5A059" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+            
+            {/* Grid horizontal lines */}
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+              const y = paddingY + chartHeight * ratio;
+              const labelValue = Math.round(maxVal * (1 - ratio));
+              return (
+                <g key={ratio} className="opacity-30">
+                  <line 
+                    x1={paddingX} 
+                    y1={y} 
+                    x2={width - paddingX} 
+                    y2={y} 
+                    stroke="#2F2A26" 
+                    strokeDasharray="4 4" 
+                  />
+                  <text 
+                    x={paddingX - 10} 
+                    y={y + 4} 
+                    fill="#9CA3AF" 
+                    fontSize="9" 
+                    textAnchor="end"
+                    className="font-mono"
+                  >
+                    {labelValue}
+                  </text>
+                </g>
+              );
+            })}
+            
+            {/* Trend Area */}
+            {points.length > 0 && (
+              <path d={areaD} fill="url(#chartGradient)" />
+            )}
+            
+            {/* Trend Line */}
+            {points.length > 0 && (
+              <path 
+                d={pathD} 
+                fill="none" 
+                stroke="#C5A059" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+              />
+            )}
+            
+            {/* Data Nodes */}
+            {points.map((p, i) => {
+              if (data.length > 15 && p.count === 0) return null;
+              return (
+                <g key={i} className="group cursor-pointer">
+                  <circle 
+                    cx={p.x} 
+                    cy={p.y} 
+                    r="3.5" 
+                    fill="#191614" 
+                    stroke="#C5A059" 
+                    strokeWidth="1.5" 
+                  />
+                  <circle 
+                    cx={p.x} 
+                    cy={p.y} 
+                    r="10" 
+                    fill="transparent" 
+                    className="hover:fill-[#C5A059]/10 transition-colors"
+                  />
+                  <title>{`${p.label}: ${p.count} views`}</title>
+                </g>
+              );
+            })}
+            
+            {/* X Axis Labels */}
+            {points.map((p, i) => {
+              if (data.length > 15 && i % 4 !== 0 && i !== data.length - 1) return null;
+              if (data.length > 7 && data.length <= 15 && i % 2 !== 0 && i !== data.length - 1) return null;
+              
+              return (
+                <text 
+                  key={i} 
+                  x={p.x} 
+                  y={height - paddingY + 16} 
+                  fill="#9CA3AF" 
+                  fontSize="9" 
+                  textAnchor="middle"
+                  className="opacity-75 font-sans"
+                >
+                  {p.label}
+                </text>
+              );
+            })}
+          </svg>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -540,6 +1015,76 @@ function LocationRow({ item, index }: { item: LocationCount; index: number }) {
         </div>
       </div>
       <span className="text-xs text-gray-500 w-10 text-right shrink-0">{item.percentage}%</span>
+    </div>
+  );
+}
+
+function PageRow({ item, index }: { item: { name: string; count: number; percentage: number }; index: number }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-gray-600 w-6 text-right shrink-0">{index + 1}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <FileText size={14} className="text-gray-500 shrink-0" />
+            <span className="text-sm text-gray-300 truncate font-mono">{item.name}</span>
+          </div>
+          <span className="text-xs text-[#C5A059] font-mono ml-2 shrink-0">
+            {item.count} {item.count === 1 ? 'view' : 'views'}
+          </span>
+        </div>
+        <div className="h-1.5 bg-[#2F2A26] rounded-full overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${item.percentage}%` }}
+            transition={{ duration: 0.6, delay: index * 0.05 }}
+            className="h-full bg-[#C5A059] rounded-full"
+          />
+        </div>
+      </div>
+      <span className="text-xs text-gray-500 w-10 text-right shrink-0">{item.percentage}%</span>
+    </div>
+  );
+}
+
+function SimpleProgressRow({ 
+  name, 
+  count, 
+  percentage, 
+  index, 
+  icon: Icon,
+  showPercentOnly = false
+}: { 
+  name: string; 
+  count: number; 
+  percentage: number; 
+  index: number;
+  icon: React.ElementType;
+  showPercentOnly?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-gray-600 w-6 text-right shrink-0">{index + 1}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <Icon size={13} className="text-gray-500 shrink-0" />
+            <span className="text-sm text-gray-300 truncate">{name}</span>
+          </div>
+          <span className="text-xs text-[#C5A059] font-mono ml-2 shrink-0">
+            {showPercentOnly ? `${percentage}%` : `${count} ${count === 1 ? 'visit' : 'visits'}`}
+          </span>
+        </div>
+        <div className="h-1.5 bg-[#2F2A26] rounded-full overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${percentage}%` }}
+            transition={{ duration: 0.6, delay: index * 0.05 }}
+            className="h-full bg-[#C5A059] rounded-full"
+          />
+        </div>
+      </div>
+      {!showPercentOnly && <span className="text-xs text-gray-500 w-10 text-right shrink-0">{percentage}%</span>}
     </div>
   );
 }

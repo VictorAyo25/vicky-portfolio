@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { page, visitorId } = body;
+    const { page, visitorId, visitorName, referrer, eventType, eventName, eventMetadata } = body;
 
     // Get visitor IP from headers (works behind proxies/CDN)
     const ip =
@@ -114,12 +114,17 @@ export async function POST(req: NextRequest) {
     // Always create a new document to preserve all history, exact times, and paths
     await adminDb.collection('analytics_visitors').add({
       visitorId: visitorId || '',
+      visitorName: visitorName || '',
       ip,
       city,
       country,
       region,
       page: page || '/',
       userAgent: req.headers.get('user-agent') || '',
+      referrer: referrer || '',
+      eventType: eventType || 'page_view',
+      eventName: eventName || '',
+      eventMetadata: eventMetadata || {},
       timestamp: FieldValue.serverTimestamp(),
     });
 

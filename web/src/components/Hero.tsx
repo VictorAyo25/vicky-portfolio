@@ -6,6 +6,7 @@ import { ArrowRight, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { trackEvent } from '@/lib/analytics';
 
 interface HomeContent {
   heroName: string;
@@ -140,6 +141,7 @@ export default function Hero() {
             href="/cv"
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => trackEvent('cv_download')}
             className="group flex items-center gap-2 text-gray-500 hover:text-gold transition-colors duration-300 text-[11px] md:text-xs font-sans tracking-wide cursor-pointer"
           >
             <Download size={14} className="group-hover:scale-110 transition-transform duration-300" />

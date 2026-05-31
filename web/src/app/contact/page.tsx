@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, MapPin, Send, Loader2, CheckCircle, MessageSquare } from 'lucide-react';
+import { trackEvent, setVisitorName } from '@/lib/analytics';
 
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx2tR3yxR3hPRreH5QFUnqoZ3Bj3TaPxbEgYNl-StY_LC2noH6Py9duXHM4NnGTjIk1/exec";
 
@@ -28,6 +29,15 @@ export default function ContactPage() {
         mode: "no-cors",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: searchParams.toString(),
+      });
+
+      // Save name for session tracking
+      setVisitorName(formData.name);
+
+      trackEvent('contact_form_submit', { 
+        name: formData.name, 
+        email: formData.email, 
+        subject: formData.subject 
       });
 
       setStatus('success');
