@@ -151,7 +151,7 @@ export default function AnalyticsPage() {
     return new Set(activeIn24h.map((v) => v.visitorId || v.ip || v.id)).size;
   }, [geoFilteredVisitors]);
 
-  // Feed of the 10 most recent visitor documents
+  // Feed of recent visitor documents (unlimited)
   const recentVisits = useMemo(() => {
     return [...filteredVisitors]
       .filter(v => !v.eventType || v.eventType === 'page_view')
@@ -159,8 +159,7 @@ export default function AnalyticsPage() {
         const tsA = a.timestamp?.seconds || 0;
         const tsB = b.timestamp?.seconds || 0;
         return tsB - tsA;
-      })
-      .slice(0, 10);
+      });
   }, [filteredVisitors]);
 
   // Compute page view statistics
@@ -550,7 +549,7 @@ export default function AnalyticsPage() {
                     <p className="text-xs text-gray-500 font-sans">Real-time log of the latest visits</p>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-auto max-h-[500px] pr-2">
                   <table className="w-full text-left border-collapse font-sans">
                     <thead>
                       <tr className="border-b border-[#2F2A26] text-xs uppercase tracking-widest text-gray-500">
