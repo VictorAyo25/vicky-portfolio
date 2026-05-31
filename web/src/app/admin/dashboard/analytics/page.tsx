@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { useEffect, useState, useMemo } from 'react';
-import { Globe, MapPin, Users, TrendingUp, FileText, Eye, Share2, Laptop, CheckCircle } from 'lucide-react';
+import { Globe, MapPin, Users, TrendingUp, FileText, Eye, Share2, Laptop, CheckCircle, FileDown } from 'lucide-react';
 
 interface VisitorRecord {
   id: string;
@@ -339,12 +339,160 @@ export default function AnalyticsPage() {
 
   return (
     <div className="p-6 lg:p-10">
+      {/* Global CSS overrides for clean print output */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          /* Page size and layout reset */
+          @page {
+            size: letter portrait;
+            margin: 15mm;
+          }
+          
+          /* Canvas & Containers Reset */
+          html, body, .admin-layout-wrapper {
+            height: auto !important;
+            overflow: visible !important;
+            background: #ffffff !important;
+            color: #111111 !important;
+          }
+          
+          /* Hide non-print frames, layout scrollbars & navigation controls */
+          aside,
+          .no-print,
+          nav,
+          .md\\:hidden,
+          button,
+          .print-hidden {
+            display: none !important;
+          }
+          
+          /* Main container page expand */
+          main {
+            overflow: visible !important;
+            height: auto !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            background: #ffffff !important;
+          }
+
+          /* Force high contrast & light modes on all analytics sections */
+          [class*="bg-[#191614]"],
+          [class*="bg-[#171311]"],
+          [class*="bg-[#1D1917]"] {
+            background: #ffffff !important;
+            border: 1px solid #e5e7eb !important;
+            color: #111111 !important;
+            box-shadow: none !important;
+            margin-bottom: 24px !important;
+            padding: 20px !important;
+            page-break-inside: avoid !important;
+          }
+
+          /* Text light overrides */
+          .text-gray-400,
+          .text-gray-500,
+          .text-gray-600 {
+            color: #4b5563 !important;
+          }
+          
+          .text-\\[\\#F3F4F6\\],
+          .text-white,
+          .text-foreground,
+          h1, h2, h3 {
+            color: #111111 !important;
+          }
+          
+          /* Accentuate dashboard gold with high-contrast print gold */
+          .text-\\[\\#C5A059\\],
+          text.text-\\[\\#C5A059\\] {
+            color: #b45309 !important;
+          }
+
+          .border-\\[\\#2F2A26\\] {
+            border-color: #e5e7eb !important;
+          }
+          
+          th {
+            border-bottom: 2px solid #e5e7eb !important;
+            color: #111111 !important;
+            font-weight: bold !important;
+          }
+          
+          td {
+            border-bottom: 1px solid #f3f4f6 !important;
+            color: #374151 !important;
+          }
+
+          /* Trend Chart print optimization */
+          #chartGradient stop {
+            stop-color: #b45309 !important;
+          }
+          svg path {
+            stroke: #b45309 !important;
+            stroke-width: 2px !important;
+          }
+          svg line {
+            stroke: #e5e7eb !important;
+          }
+          svg text {
+            fill: #4b5563 !important;
+            font-size: 10px !important;
+          }
+          
+          /* Stack layout columns cleanly */
+          .grid {
+            display: block !important;
+          }
+          
+          .grid > div {
+            width: 100% !important;
+            margin-bottom: 24px !important;
+            page-break-inside: avoid !important;
+          }
+
+          /* Exact background fills for print progress-bars */
+          [class*="bg-[#C5A059]"] {
+            background-color: #b45309 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          [class*="bg-[#2F2A26]"] {
+            background-color: #f3f4f6 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          /* Auto table scrolling expand */
+          .overflow-auto {
+            overflow: visible !important;
+            max-height: none !important;
+          }
+        }
+      ` }} />
+
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <header className="mb-10 rounded-2xl border border-[#2F2A26] bg-[#171311] px-6 py-6 lg:px-8 lg:py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+        {/* Print-Only Detailed Header */}
+        <div className="hidden print:block mb-8 border-b-2 border-gray-200 pb-5">
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl font-serif font-bold text-gray-900 tracking-tight">Victoria Odueso</h1>
+              <p className="text-xs text-gray-500 uppercase tracking-widest mt-1">SEO Writer &amp; Content Strategist Portfolio</p>
+            </div>
+            <div className="text-right">
+              <h2 className="text-lg font-bold text-gray-800">Portfolio Analytics Report</h2>
+              <p className="text-xs text-gray-600 mt-1">Reporting Period: {timeRange === '24h' ? 'Last 24 Hours' : timeRange === '7d' ? 'Last 7 Days' : 'Last 30 Days'}</p>
+              <p className="text-xs text-gray-500">Generated: {new Date().toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+
+        <header className="mb-10 rounded-2xl border border-[#2F2A26] bg-[#171311] px-6 py-6 lg:px-8 lg:py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 no-print">
           <div>
             <p className="text-[11px] uppercase tracking-[0.2em] text-[#C5A059] mb-2">Analytics</p>
             <h1 className="text-3xl lg:text-4xl font-serif text-[#F3F4F6] tracking-tight mb-2">
@@ -355,21 +503,33 @@ export default function AnalyticsPage() {
             </p>
           </div>
 
-          {/* Time range toggle */}
-          <div className="flex items-center gap-1 bg-[#191614] border border-[#2F2A26] p-1 rounded-xl w-fit self-start sm:self-center shrink-0">
-            {(['24h', '7d', '30d'] as const).map((range) => (
-              <button
-                key={range}
-                onClick={() => setTimeRange(range)}
-                className={`px-4 py-2 text-xs font-sans rounded-lg transition-all duration-200 ${
-                  timeRange === range
-                    ? 'bg-[#C5A059] text-[#171311] font-semibold shadow-md'
-                    : 'text-gray-400 hover:text-[#F3F4F6] hover:bg-[#201C1A]'
-                }`}
-              >
-                {range === '24h' ? '24 Hours' : range === '7d' ? '7 Days' : '30 Days'}
-              </button>
-            ))}
+          {/* Controls */}
+          <div className="flex flex-wrap items-center gap-3 self-start sm:self-center shrink-0">
+            {/* Export PDF Button */}
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2.5 text-xs font-sans font-semibold rounded-xl border border-[#C5A059]/40 text-[#C5A059] hover:bg-[#C5A059]/10 hover:text-white transition-all duration-200 flex items-center gap-2 cursor-pointer"
+            >
+              <FileDown size={14} />
+              Export PDF
+            </button>
+
+            {/* Time range toggle */}
+            <div className="flex items-center gap-1 bg-[#191614] border border-[#2F2A26] p-1 rounded-xl">
+              {(['24h', '7d', '30d'] as const).map((range) => (
+                <button
+                  key={range}
+                  onClick={() => setTimeRange(range)}
+                  className={`px-4 py-2 text-xs font-sans rounded-lg transition-all duration-200 ${
+                    timeRange === range
+                      ? 'bg-[#C5A059] text-[#171311] font-semibold shadow-md'
+                      : 'text-gray-400 hover:text-[#F3F4F6] hover:bg-[#201C1A]'
+                  }`}
+                >
+                  {range === '24h' ? '24 Hours' : range === '7d' ? '7 Days' : '30 Days'}
+                </button>
+              ))}
+            </div>
           </div>
         </header>
 
