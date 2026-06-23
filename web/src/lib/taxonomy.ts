@@ -1,4 +1,4 @@
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
 export interface Taxonomy {
@@ -49,7 +49,8 @@ export const INITIAL_TAXONOMY: Taxonomy = {
     "Sports & Martial Arts - Fitness Education"
   ],
   "E-book": [],
-  "Scripts": []
+  "Scripts": [],
+  "Digital PR": []
 };
 
 export const TAXONOMY_DOC_ID = 'structure';
@@ -69,6 +70,25 @@ export async function fetchTaxonomy(): Promise<Taxonomy> {
   } catch (error) {
     console.error("Error fetching taxonomy:", error);
     return INITIAL_TAXONOMY; // Fallback so the site doesn't crash
+  }
+}
+
+export async function addCategory(category: string) {
+  const trimmed = category.trim();
+  if (!trimmed) return;
+
+  const docRef = doc(db, TAXONOMY_COLLECTION, TAXONOMY_DOC_ID);
+  const docSnap = await getDoc(docRef);
+
+  if (docSnap.exists()) {
+    const data = docSnap.data() as Taxonomy;
+    if (Object.prototype.hasOwnProperty.call(data, trimmed)) return;
+    await updateDoc(docRef, {
+      [trimmed]: []
+    });
+  } else {
+    // Seed the doc from the initial taxonomy plus the new category.
+    await setDoc(docRef, { ...INITIAL_TAXONOMY, [trimmed]: [] });
   }
 }
 

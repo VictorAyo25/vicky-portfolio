@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, Users, Edit3, Mic, Book, Clapperboard, Download, Loader2, ArrowUpRight } from 'lucide-react';
+import { BookOpen, Users, Edit3, Mic, Book, Clapperboard, Megaphone, Download, Loader2, ArrowUpRight } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { motion } from 'framer-motion';
@@ -36,6 +36,7 @@ const portfolioLinks = [
   { title: 'Press Releases', href: '/category/press-releases', icon: Mic },
   { title: 'E-Book', href: '/category/e-book', icon: Book },
   { title: 'Scripts', href: '/category/scripts', icon: Clapperboard },
+  { title: 'Digital PR', href: '/category/digital-pr', icon: Megaphone },
 ];
 
 export default function AboutPage() {

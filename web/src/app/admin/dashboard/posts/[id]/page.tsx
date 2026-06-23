@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, setDoc, collection, query, getDocs, orderBy, writeBatch, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, collection, query, getDocs, orderBy, writeBatch } from 'firebase/firestore';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { fetchTaxonomy, Taxonomy, addSubcategory } from '@/lib/taxonomy';
 import { useToast } from '@/context/ToastContext';
@@ -70,10 +70,6 @@ export default function EditPostPage() {
   const [coverUploading, setCoverUploading] = useState(false);
 
   const [isNewSubCategoryMode, setIsNewSubCategoryMode] = useState(false);
-  const [isNewCategoryMode, setIsNewCategoryMode] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategorySlug, setNewCategorySlug] = useState('');
-  const [submittingCategory, setSubmittingCategory] = useState(false);
   const [newSubCategoryName, setNewSubCategoryName] = useState('');
   const [googleDocUrl, setGoogleDocUrl] = useState('');
   const [importingDoc, setImportingDoc] = useState(false);
@@ -182,24 +178,6 @@ export default function EditPostPage() {
       e.preventDefault();
       addKeyword();
     }
-  };
-
-  const handleCategoryNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const name = e.target.value;
-    setNewCategoryName(name);
-    setNewCategorySlug(name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''));
-  };
-
-  const handleCreateCategory = async () => {
-    if (!newCategoryName.trim()) { showToast('Category name is required', 'error'); return; }
-    setSubmittingCategory(true);
-    try {
-      await addDoc(collection(db, 'categories'), { name: newCategoryName.trim(), slug: newCategorySlug.trim(), createdAt: serverTimestamp() });
-      showToast('Category created successfully', 'success');
-      setNewCategoryName(''); setNewCategorySlug(''); setIsNewCategoryMode(false);
-      const data = await fetchTaxonomy(); setTaxonomy(data);
-    } catch (err) { console.error(err); showToast('Failed to create category', 'error'); }
-    finally { setSubmittingCategory(false); }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isCover: boolean) => {

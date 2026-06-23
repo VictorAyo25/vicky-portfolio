@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { uploadToCloudinary } from '@/lib/cloudinary';
-import { fetchTaxonomy, addSubcategory, Taxonomy } from '@/lib/taxonomy';
+import { fetchTaxonomy, addCategory, addSubcategory, Taxonomy } from '@/lib/taxonomy';
 import { useToast } from '@/context/ToastContext';
 import { Loader2, Save, Image as ImageIcon, Link as LinkIcon, Plus, UploadCloud, Images, Tag, FileText, X, CloudOff, Cloud, FileUp, Upload } from 'lucide-react';
 import RichTextEditor from '@/components/admin/RichTextEditor';
@@ -210,17 +210,18 @@ export default function CreatePost() {
     }
     setSubmittingCategory(true);
     try {
-      await addDoc(collection(db, 'categories'), {
-        name: newCategoryName.trim(),
-        slug: newCategorySlug.trim(),
-        createdAt: serverTimestamp(),
-      });
+      const trimmedName = newCategoryName.trim();
+      // Write to the taxonomy/structure doc (the source of truth read by
+      // fetchTaxonomy), so the new category appears in the nav and category pages.
+      await addCategory(trimmedName);
       showToast('Category created successfully', 'success');
       setNewCategoryName('');
       setNewCategorySlug('');
       setIsNewCategoryMode(false);
       const data = await fetchTaxonomy();
       setTaxonomy(data);
+      setCategory(trimmedName);
+      setSubCategory('');
     } catch (err) {
       console.error('Error creating category:', err);
       showToast('Failed to create category', 'error');
