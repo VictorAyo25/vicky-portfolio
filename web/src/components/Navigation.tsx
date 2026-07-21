@@ -4,7 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X, ChevronDown, ArrowRight, Play, Sun, Moon, Download } from 'lucide-react';
-import { INITIAL_TAXONOMY, fetchTaxonomy, formatTaxonomyLabel, type Taxonomy } from '@/lib/taxonomy';
+import {
+  INITIAL_TAXONOMY,
+  fetchTaxonomy,
+  formatTaxonomyLabel,
+  orderedCategories,
+  type Taxonomy,
+} from '@/lib/taxonomy';
 import { useTheme } from '@/context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -20,7 +26,7 @@ export default function Navigation() {
   // replaced with the live one so categories created in the admin show up
   // without a redeploy.
   const [taxonomy, setTaxonomy] = useState<Taxonomy>(INITIAL_TAXONOMY);
-  const navLinks = Object.keys(taxonomy);
+  const navLinks = orderedCategories(taxonomy);
 
   useEffect(() => {
     let cancelled = false;

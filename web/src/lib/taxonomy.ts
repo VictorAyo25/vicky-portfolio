@@ -81,6 +81,27 @@ export interface TaxonomyAliases {
 }
 
 /**
+ * Categories in a stable, intentional order.
+ *
+ * Firestore returns map keys in an arbitrary order, so reading the live
+ * taxonomy directly scrambles the menu. Known categories keep the curated
+ * order defined in INITIAL_TAXONOMY; anything added later is appended
+ * alphabetically so the result is always deterministic.
+ */
+export function orderedCategories(taxonomy: Taxonomy): string[] {
+  const curated = Object.keys(INITIAL_TAXONOMY);
+  const rankOf = (name: string) => {
+    const index = curated.indexOf(name);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+
+  return Object.keys(taxonomy).sort((a, b) => {
+    const rankDiff = rankOf(a) - rankOf(b);
+    return rankDiff !== 0 ? rankDiff : a.localeCompare(b);
+  });
+}
+
+/**
  * Display label for a category or sub-category.
  *
  * Names are free text typed in the admin, so an ALL-CAPS entry would shout

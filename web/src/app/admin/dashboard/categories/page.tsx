@@ -15,6 +15,7 @@ import {
   deleteSubcategory,
   categorySlug,
   subCategorySlug,
+  orderedCategories,
   type Taxonomy,
 } from '@/lib/taxonomy';
 import { useToast } from '@/context/ToastContext';
@@ -100,7 +101,7 @@ export default function CategoriesManagerPage() {
     void load();
   }, [load]);
 
-  const categories = useMemo(() => Object.keys(taxonomy), [taxonomy]);
+  const categories = useMemo(() => orderedCategories(taxonomy), [taxonomy]);
 
   const resetEditing = () => {
     setEditingCategory(null);

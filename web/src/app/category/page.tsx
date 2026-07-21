@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, ArrowRight, ChevronDown, Compass } from 'lucide-react';
-import { fetchTaxonomy, Taxonomy } from '@/lib/taxonomy';
+import { fetchTaxonomy, orderedCategories, Taxonomy } from '@/lib/taxonomy';
 
 export default function CategoriesIndexPage() {
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
@@ -34,7 +34,7 @@ export default function CategoriesIndexPage() {
     );
   }
 
-  const categories = taxonomy ? Object.keys(taxonomy) : [];
+  const categories = taxonomy ? orderedCategories(taxonomy) : [];
 
   return (
     <main className="min-h-screen bg-[#0F0E0D] px-6 py-24 pb-32">
