@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function Navigation() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
+  const [workMenuOpen, setWorkMenuOpen] = useState(false);
   const [expandedMobileCategory, setExpandedMobileCategory] = useState<string | null>(null);
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
@@ -42,9 +42,18 @@ export default function Navigation() {
 
   useEffect(() => {
     setMobileMenuOpen(false);
-    setHoveredCategory(null);
+    setWorkMenuOpen(false);
     setExpandedMobileCategory(null);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!workMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setWorkMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [workMenuOpen]);
 
   useEffect(() => {
     document.body.style.overflow = mobileMenuOpen ? 'hidden' : '';
@@ -97,49 +106,76 @@ export default function Navigation() {
               Multimedia
             </Link>
 
-            {navLinks.map((category) => {
-              const catSlug = category.toLowerCase().replace(/\s+/g, '-');
-              const isActive = pathname.includes(catSlug);
-              const hasSubs = (taxonomy[category]?.length ?? 0) > 0;
+            {/* All categories live behind one trigger, so the bar keeps a fixed
+                width no matter how many categories exist. */}
+            <div
+              className="relative h-20 flex items-center"
+              onMouseEnter={() => setWorkMenuOpen(true)}
+              onMouseLeave={() => setWorkMenuOpen(false)}
+            >
+              <button
+                type="button"
+                onClick={() => setWorkMenuOpen((open) => !open)}
+                aria-expanded={workMenuOpen}
+                aria-haspopup="true"
+                className={`flex items-center gap-1.5 uppercase tracking-[0.15em] transition-colors duration-200 min-h-11 px-1 cursor-pointer ${
+                  pathname.startsWith('/category') ? 'text-[#C5A059]' : 'text-gray-400 hover:text-[#F3F4F6]'
+                }`}
+              >
+                Work
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform duration-300 ${workMenuOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
 
-              return (
-                <div
-                  key={category}
-                  className="relative h-20 flex items-center"
-                  onMouseEnter={() => setHoveredCategory(category)}
-                  onMouseLeave={() => setHoveredCategory(null)}
-                >
-                  <Link
-                    href={`/category/${catSlug}`}
-                    className={`flex items-center gap-1.5 transition-colors duration-200 min-h-11 px-1 ${
-                      isActive ? 'text-[#C5A059]' : 'text-gray-400 hover:text-[#F3F4F6]'
-                    }`}
+              <AnimatePresence>
+                {workMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    className="absolute top-full right-0 w-[min(46rem,calc(100vw-3rem))] max-h-[min(70vh,32rem)] overflow-y-auto bg-[#141210]/97 backdrop-blur-xl border border-[#2F2A26]/80 rounded-2xl shadow-2xl shadow-black/50 p-5 z-50"
                   >
-                    {category}
-                    {hasSubs && (
-                      <ChevronDown
-                        size={12}
-                        className={`transition-transform duration-300 ${hoveredCategory === category ? 'rotate-180' : ''}`}
-                      />
-                    )}
-                  </Link>
+                    <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5">
+                      {navLinks.map((category) => {
+                        const catSlug = category.toLowerCase().replace(/\s+/g, '-');
+                        const isActive = pathname.includes(catSlug);
+                        const subs = taxonomy[category] ?? [];
 
-                  {hoveredCategory === category && hasSubs && (
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-60 bg-[#141210]/95 backdrop-blur-xl border border-[#2F2A26]/80 rounded-xl shadow-2xl shadow-black/40 p-3 grid gap-1 z-50">
-                      {(taxonomy[category] ?? []).map((sub) => (
-                        <Link
-                          key={sub}
-                          href={`/category/${catSlug}/${sub.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-                          className="block px-3 py-2 text-[11px] text-gray-400 hover:text-[#C5A059] hover:bg-[#C5A059]/5 rounded-lg transition-all duration-200 capitalize"
-                        >
-                          {sub}
-                        </Link>
-                      ))}
+                        return (
+                          <div key={category} className="min-w-0">
+                            <Link
+                              href={`/category/${catSlug}`}
+                              className={`block text-[11px] font-semibold tracking-[0.12em] pb-1.5 mb-2 border-b border-[#2F2A26]/70 transition-colors ${
+                                isActive ? 'text-[#C5A059]' : 'text-[#F3F4F6] hover:text-[#C5A059]'
+                              }`}
+                            >
+                              {category}
+                            </Link>
+
+                            {subs.length > 0 && (
+                              <div className="flex flex-col gap-1.5">
+                                {subs.map((sub) => (
+                                  <Link
+                                    key={sub}
+                                    href={`/category/${catSlug}/${sub.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                                    className="block text-[11px] normal-case tracking-normal leading-snug text-gray-400 hover:text-[#C5A059] transition-colors"
+                                  >
+                                    {sub}
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Theme Toggle Button */}
             <button
