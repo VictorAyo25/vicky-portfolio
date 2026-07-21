@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, notFound } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { fetchTaxonomy, resolveCategoryBySlug } from '@/lib/taxonomy';
@@ -30,6 +30,7 @@ export default function CategoryPage() {
   const [posts, setPosts] = useState<CategoryPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoryName, setCategoryName] = useState<string>('');
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     async function fetchPosts() {
@@ -40,7 +41,9 @@ export default function CategoryPage() {
         const foundKey = await resolveCategoryBySlug(taxonomy, slug);
 
         if (!foundKey) {
-          setCategoryName(slug.replace(/-/g, ' '));
+          // Previously rendered an empty page titled after the raw slug,
+          // which looked like a real (but empty) category.
+          setMissing(true);
           setLoading(false);
           return;
         }
@@ -82,6 +85,8 @@ export default function CategoryPage() {
 
     if (slug) fetchPosts();
   }, [slug]);
+
+  if (missing) notFound();
 
   if (loading) {
     return (

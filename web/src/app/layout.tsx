@@ -5,6 +5,7 @@ import ConditionalNavigation from "@/components/ConditionalNavigation";
 import { ToastProvider } from "@/context/ToastContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import ClientLayout from "./ClientLayout";
+import { SITE_URL, SITE_NAME } from "@/lib/site";
 
 const playfair = Playfair_Display({
   variable: "--font-serif",
@@ -24,20 +25,38 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
+const TITLE = "Victoria Odueso | Writing Portfolio";
+const DESCRIPTION =
+  "An elegant portfolio showcasing expertise in SaaS, Digital Marketing, and premium Content Strategy.";
+
 export const metadata: Metadata = {
-  title: "Victoria Odueso | Writing Portfolio",
-  description: "An elegant portfolio showcasing expertise in SaaS, Digital Marketing, and premium Content Strategy.",
+  // Required for relative OG/canonical URLs to resolve to absolute ones.
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: TITLE,
+    // Page-level titles render as "Post Title | Victoria Odueso".
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: DESCRIPTION,
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
-    title: "Victoria Odueso | Writing Portfolio",
-    description: "An elegant portfolio showcasing expertise in SaaS, Digital Marketing, and premium Content Strategy.",
+    title: TITLE,
+    description: DESCRIPTION,
     type: "website",
     siteName: "Victoria Odueso Portfolio",
     locale: "en_US",
+    url: SITE_URL,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Victoria Odueso | Writing Portfolio",
-    description: "An elegant portfolio showcasing expertise in SaaS, Digital Marketing, and premium Content Strategy.",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 

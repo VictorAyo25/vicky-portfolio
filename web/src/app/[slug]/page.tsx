@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, notFound } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { motion } from 'framer-motion';
@@ -31,12 +31,12 @@ interface Post {
 export default function SinglePostPage() {
   const params = useParams();
   const slug = params.slug as string;
-  const router = useRouter();
 
   const [post, setPost] = useState<Post | null>(null);
   const [fullContent, setFullContent] = useState<string>('');
   const [relatedPosts, setRelatedPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     async function fetchPost() {
@@ -49,7 +49,7 @@ export default function SinglePostPage() {
           const data = docSnapshot.data() as Omit<Post, 'id'>;
 
           if (data.deleted || data.published === false) {
-            router.push('/404');
+            setMissing(true);
             return;
           }
 
@@ -80,7 +80,7 @@ export default function SinglePostPage() {
             .slice(0, 3);
           setRelatedPosts(related);
         } else {
-          router.push('/404');
+          setMissing(true);
         }
       } catch (err) {
         console.error("Failed to fetch post", err);
@@ -90,7 +90,11 @@ export default function SinglePostPage() {
     }
 
     if (slug) fetchPost();
-  }, [slug, router]);
+  }, [slug]);
+
+  // Render-phase call so Next serves the real 404 page; the old
+  // router.push('/404') pointed at a route that never existed.
+  if (missing) notFound();
 
   if (loading) {
     return <SinglePostSkeleton />;

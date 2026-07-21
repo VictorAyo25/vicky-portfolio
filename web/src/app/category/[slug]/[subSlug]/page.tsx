@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, notFound } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { fetchTaxonomy, resolveCategoryBySlug, resolveSubCategoryBySlug } from '@/lib/taxonomy';
@@ -33,6 +33,7 @@ export default function SubCategoryPage() {
   const [loading, setLoading] = useState(true);
   const [categoryName, setCategoryName] = useState<string>('');
   const [subCategoryName, setSubCategoryName] = useState<string>('');
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     async function fetchPosts() {
@@ -45,6 +46,7 @@ export default function SubCategoryPage() {
         const categoryKey = await resolveCategoryBySlug(taxonomy, categorySlug);
 
         if (!categoryKey) {
+          setMissing(true);
           setLoading(false);
           return;
         }
@@ -55,6 +57,7 @@ export default function SubCategoryPage() {
         const subCategoryKey = await resolveSubCategoryBySlug(subCategories, subCategorySlug);
 
         if (!subCategoryKey) {
+          setMissing(true);
           setLoading(false);
           return;
         }
@@ -94,6 +97,8 @@ export default function SubCategoryPage() {
     fetchPosts();
   }, [categorySlug, subCategorySlug]);
 
+  if (missing) notFound();
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#110F0E] flex items-center justify-center">
@@ -105,7 +110,7 @@ export default function SubCategoryPage() {
   return (
     <main className="min-h-screen bg-[#110F0E] px-6 py-24 pb-32">
       <div className="max-w-7xl mx-auto">
-        
+
         {/* Back Button */}
         <Link href={`/category/${categorySlug}`} className="inline-flex items-center gap-2 text-gray-500 hover:text-[#C5A059] mb-8 transition-colors text-sm uppercase tracking-widest font-bold">
             <ArrowLeft size={16} />
