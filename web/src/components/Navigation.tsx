@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X, ChevronDown, ArrowRight, Play, Sun, Moon, Download } from 'lucide-react';
-import { INITIAL_TAXONOMY } from '@/lib/taxonomy';
+import { INITIAL_TAXONOMY, fetchTaxonomy, type Taxonomy } from '@/lib/taxonomy';
 import { useTheme } from '@/context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -16,7 +16,23 @@ export default function Navigation() {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
 
-  const navLinks = Object.keys(INITIAL_TAXONOMY);
+  // Seeded with the static taxonomy so the nav renders immediately, then
+  // replaced with the live one so categories created in the admin show up
+  // without a redeploy.
+  const [taxonomy, setTaxonomy] = useState<Taxonomy>(INITIAL_TAXONOMY);
+  const navLinks = Object.keys(taxonomy);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchTaxonomy()
+      .then((data) => {
+        if (!cancelled) setTaxonomy(data);
+      })
+      .catch((err) => console.error('Failed to load taxonomy for navigation:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 40);
@@ -84,7 +100,7 @@ export default function Navigation() {
             {navLinks.map((category) => {
               const catSlug = category.toLowerCase().replace(/\s+/g, '-');
               const isActive = pathname.includes(catSlug);
-              const hasSubs = INITIAL_TAXONOMY[category]?.length > 0;
+              const hasSubs = (taxonomy[category]?.length ?? 0) > 0;
 
               return (
                 <div
@@ -110,7 +126,7 @@ export default function Navigation() {
 
                   {hoveredCategory === category && hasSubs && (
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-60 bg-[#141210]/95 backdrop-blur-xl border border-[#2F2A26]/80 rounded-xl shadow-2xl shadow-black/40 p-3 grid gap-1 z-50">
-                      {INITIAL_TAXONOMY[category].map((sub) => (
+                      {(taxonomy[category] ?? []).map((sub) => (
                         <Link
                           key={sub}
                           href={`/category/${catSlug}/${sub.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
@@ -223,7 +239,7 @@ export default function Navigation() {
 
                 {navLinks.map((category) => {
                   const catSlug = category.toLowerCase().replace(/\s+/g, '-');
-                  const hasSubs = INITIAL_TAXONOMY[category]?.length > 0;
+                  const hasSubs = (taxonomy[category]?.length ?? 0) > 0;
                   const isExpanded = expandedMobileCategory === category;
                   const isActive = pathname.includes(catSlug);
 
@@ -258,7 +274,7 @@ export default function Navigation() {
                             className="overflow-hidden"
                           >
                             <div className="pl-4 pb-4 border-l border-[#C5A059]/40 ml-2 mt-1 flex flex-col gap-2.5">
-                              {INITIAL_TAXONOMY[category].map((sub) => {
+                              {(taxonomy[category] ?? []).map((sub) => {
                                 const subSlug = sub.toLowerCase().replace(/[^a-z0-9]+/g, '-');
                                 const isSubActive = pathname.includes(subSlug);
                                 return (

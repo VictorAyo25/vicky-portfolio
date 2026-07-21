@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { fetchTaxonomy } from '@/lib/taxonomy';
+import { fetchTaxonomy, resolveCategoryBySlug, resolveSubCategoryBySlug } from '@/lib/taxonomy';
 import PostCard from '@/components/PostCard';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -41,23 +41,18 @@ export default function SubCategoryPage() {
       try {
         const taxonomy = await fetchTaxonomy();
         
-        // 1. Resolve Category
-        const taxonomyKeys = Object.keys(taxonomy);
-        const categoryKey = taxonomyKeys.find(key => 
-          key.toLowerCase().replace(/\s+/g, '-') === categorySlug
-        );
+        // 1. Resolve Category (rename aliases keep old links working)
+        const categoryKey = await resolveCategoryBySlug(taxonomy, categorySlug);
 
         if (!categoryKey) {
           setLoading(false);
-          return; 
+          return;
         }
         setCategoryName(categoryKey);
 
         // 2. Resolve SubCategory from the matched Category's array
         const subCategories = taxonomy[categoryKey] || [];
-        const subCategoryKey = subCategories.find(sub => 
-          sub.toLowerCase().replace(/[^a-z0-9]+/g, '-') === subCategorySlug
-        );
+        const subCategoryKey = await resolveSubCategoryBySlug(subCategories, subCategorySlug);
 
         if (!subCategoryKey) {
           setLoading(false);

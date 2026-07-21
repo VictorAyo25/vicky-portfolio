@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { fetchTaxonomy } from '@/lib/taxonomy';
+import { fetchTaxonomy, resolveCategoryBySlug } from '@/lib/taxonomy';
 import PostCard from '@/components/PostCard';
 import { Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,13 +34,10 @@ export default function CategoryPage() {
   useEffect(() => {
     async function fetchPosts() {
       try {
-        // 1. Resolve Category Name from Slug
+        // 1. Resolve Category Name from Slug (falling back to rename aliases,
+        //    so links shared before a rename still land on the right page)
         const taxonomy = await fetchTaxonomy();
-        const keys = Object.keys(taxonomy);
-        
-        const foundKey = keys.find(key => 
-          key.toLowerCase().replace(/\s+/g, '-') === slug
-        );
+        const foundKey = await resolveCategoryBySlug(taxonomy, slug);
 
         if (!foundKey) {
           setCategoryName(slug.replace(/-/g, ' '));

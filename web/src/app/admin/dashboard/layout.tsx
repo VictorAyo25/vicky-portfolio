@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { LogOut, FileText, LayoutDashboard, Trash, Home, Image as ImageIcon, Settings, ChevronRight, Menu, X, BarChart3 } from 'lucide-react';
+import { LogOut, FileText, LayoutDashboard, Trash, Home, Image as ImageIcon, Settings, ChevronRight, Menu, X, BarChart3, FolderTree } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -96,6 +96,10 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
               </motion.div>
             )}
           </AnimatePresence>
+
+          <Link href="/admin/dashboard/categories" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/categories') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
+            <FolderTree size={18} /> Categories
+          </Link>
 
           <Link href="/admin/dashboard/about" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/about') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
             <FileText size={18} /> About Page
