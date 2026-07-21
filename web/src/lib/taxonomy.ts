@@ -80,6 +80,23 @@ export interface TaxonomyAliases {
   subCategories?: Record<string, string>;
 }
 
+/**
+ * Display label for a category or sub-category.
+ *
+ * Names are free text typed in the admin, so an ALL-CAPS entry would shout
+ * next to title-cased neighbours. Only multi-word all-caps names are
+ * normalised — single words are left alone so acronyms (SEO, SaaS) and
+ * deliberate casing (E-book, EdTech, WordPress) survive untouched.
+ */
+export function formatTaxonomyLabel(name: string): string {
+  const isShouty = name === name.toUpperCase() && /[A-Z]/.test(name) && /\s/.test(name);
+  if (!isShouty) return name;
+
+  return name
+    .toLowerCase()
+    .replace(/(^|[\s\-/&(])([a-z])/g, (_match, prefix, letter) => prefix + letter.toUpperCase());
+}
+
 export function categorySlug(name: string): string {
   return name.toLowerCase().replace(/\s+/g, '-');
 }

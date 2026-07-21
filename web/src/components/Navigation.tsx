@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X, ChevronDown, ArrowRight, Play, Sun, Moon, Download } from 'lucide-react';
-import { INITIAL_TAXONOMY, fetchTaxonomy, type Taxonomy } from '@/lib/taxonomy';
+import { INITIAL_TAXONOMY, fetchTaxonomy, formatTaxonomyLabel, type Taxonomy } from '@/lib/taxonomy';
 import { useTheme } from '@/context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -138,24 +138,27 @@ export default function Navigation() {
                     transition={{ duration: 0.18, ease: 'easeOut' }}
                     className="absolute top-full right-0 w-[min(46rem,calc(100vw-3rem))] max-h-[min(70vh,32rem)] overflow-y-auto bg-[#141210]/97 backdrop-blur-xl border border-[#2F2A26]/80 rounded-2xl shadow-2xl shadow-black/50 p-5 z-50"
                   >
-                    <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5">
+                    {/* Multi-column flow rather than a grid: grid rows stretch every
+                        cell to the tallest one, which left categories with no
+                        sub-categories sitting in a huge blank box. */}
+                    <div className="columns-2 xl:columns-3 gap-6">
                       {navLinks.map((category) => {
                         const catSlug = category.toLowerCase().replace(/\s+/g, '-');
                         const isActive = pathname.includes(catSlug);
                         const subs = taxonomy[category] ?? [];
 
                         return (
-                          <div key={category} className="min-w-0">
+                          <div key={category} className="min-w-0 break-inside-avoid mb-5">
                             <Link
                               href={`/category/${catSlug}`}
                               className={`block text-[11px] font-semibold tracking-[0.12em] pb-1.5 mb-2 border-b border-[#2F2A26]/70 transition-colors ${
                                 isActive ? 'text-[#C5A059]' : 'text-[#F3F4F6] hover:text-[#C5A059]'
                               }`}
                             >
-                              {category}
+                              {formatTaxonomyLabel(category)}
                             </Link>
 
-                            {subs.length > 0 && (
+                            {subs.length > 0 ? (
                               <div className="flex flex-col gap-1.5">
                                 {subs.map((sub) => (
                                   <Link
@@ -163,10 +166,20 @@ export default function Navigation() {
                                     href={`/category/${catSlug}/${sub.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
                                     className="block text-[11px] normal-case tracking-normal leading-snug text-gray-400 hover:text-[#C5A059] transition-colors"
                                   >
-                                    {sub}
+                                    {formatTaxonomyLabel(sub)}
                                   </Link>
                                 ))}
                               </div>
+                            ) : (
+                              // Categories that hold posts directly would otherwise
+                              // render as a bare heading and read as broken.
+                              <Link
+                                href={`/category/${catSlug}`}
+                                className="inline-flex items-center gap-1 text-[11px] normal-case tracking-normal text-gray-500 hover:text-[#C5A059] transition-colors"
+                              >
+                                View all posts
+                                <ArrowRight size={11} />
+                              </Link>
                             )}
                           </div>
                         );
@@ -249,10 +262,14 @@ export default function Navigation() {
               className="flex-1 overflow-y-auto px-6 py-8 flex flex-col justify-between"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col">
+                <p className="text-[10px] uppercase tracking-[0.25em] text-[#C5A059]/70 font-sans font-semibold mb-1">
+                  Menu
+                </p>
+
                 <Link
                   href="/about"
-                  className={`flex items-center justify-between py-4 text-xl font-serif border-b border-[#2F2A26]/30 transition-colors ${
+                  className={`flex items-center justify-between py-3.5 text-xl font-serif border-b border-[#2F2A26]/30 transition-colors ${
                     pathname === '/about' ? 'text-[#C5A059]' : 'text-[#F3F4F6] hover:text-[#C5A059]'
                   }`}
                 >
@@ -262,7 +279,7 @@ export default function Navigation() {
 
                 <Link
                   href="/multimedia"
-                  className={`flex items-center justify-between py-4 text-xl font-serif border-b border-[#2F2A26]/30 transition-colors ${
+                  className={`flex items-center justify-between py-3.5 text-xl font-serif border-b border-[#2F2A26]/30 transition-colors ${
                     pathname === '/multimedia' ? 'text-[#C5A059]' : 'text-[#F3F4F6] hover:text-[#C5A059]'
                   }`}
                 >
@@ -273,6 +290,10 @@ export default function Navigation() {
                   {pathname === '/multimedia' && <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]" />}
                 </Link>
 
+                <p className="text-[10px] uppercase tracking-[0.25em] text-[#C5A059]/70 font-sans font-semibold mt-8 mb-1">
+                  Explore Work
+                </p>
+
                 {navLinks.map((category) => {
                   const catSlug = category.toLowerCase().replace(/\s+/g, '-');
                   const hasSubs = (taxonomy[category]?.length ?? 0) > 0;
@@ -281,23 +302,37 @@ export default function Navigation() {
 
                   return (
                     <div key={category} className="border-b border-[#2F2A26]/30">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-3">
                         <Link
                           href={`/category/${catSlug}`}
-                          className={`flex-1 py-4 text-xl font-serif transition-colors ${
+                          className={`flex-1 min-w-0 py-3.5 text-lg font-serif leading-snug transition-colors ${
                             isActive ? 'text-[#C5A059]' : 'text-[#F3F4F6] hover:text-[#C5A059]'
                           }`}
                         >
-                          {category}
+                          {formatTaxonomyLabel(category)}
                         </Link>
-                        {hasSubs && (
+                        {hasSubs ? (
                           <button
                             onClick={() => setExpandedMobileCategory(isExpanded ? null : category)}
-                            className="p-3 text-gray-500 hover:text-[#C5A059] active:scale-90 transition-transform"
-                            aria-label={`Toggle ${category} submenu`}
+                            className={`shrink-0 w-9 h-9 rounded-full border inline-flex items-center justify-center active:scale-90 transition-all ${
+                              isExpanded
+                                ? 'border-[#C5A059] text-[#C5A059] bg-[#C5A059]/10'
+                                : 'border-[#3A332E] text-gray-500 hover:text-[#C5A059] hover:border-[#C5A059]/60'
+                            }`}
+                            aria-label={`Toggle ${formatTaxonomyLabel(category)} submenu`}
+                            aria-expanded={isExpanded}
                           >
-                            <ChevronDown size={18} className={`transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#C5A059]' : ''}`} />
+                            <ChevronDown size={16} className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                           </button>
+                        ) : (
+                          // Decorative: the row itself is the link. Without this the
+                          // row looks unfinished next to expandable siblings.
+                          <span
+                            aria-hidden="true"
+                            className="shrink-0 w-9 h-9 inline-flex items-center justify-center text-gray-600"
+                          >
+                            <ArrowRight size={15} />
+                          </span>
                         )}
                       </div>
                       <AnimatePresence initial={false}>
@@ -309,7 +344,7 @@ export default function Navigation() {
                             transition={{ duration: 0.25, ease: 'easeInOut' }}
                             className="overflow-hidden"
                           >
-                            <div className="pl-4 pb-4 border-l border-[#C5A059]/40 ml-2 mt-1 flex flex-col gap-2.5">
+                            <div className="pb-4 pt-1 flex flex-wrap gap-2">
                               {(taxonomy[category] ?? []).map((sub) => {
                                 const subSlug = sub.toLowerCase().replace(/[^a-z0-9]+/g, '-');
                                 const isSubActive = pathname.includes(subSlug);
@@ -317,11 +352,13 @@ export default function Navigation() {
                                   <Link
                                     key={sub}
                                     href={`/category/${catSlug}/${subSlug}`}
-                                    className={`text-sm font-sans capitalize transition-colors ${
-                                      isSubActive ? 'text-[#C5A059]' : 'text-gray-400 hover:text-white'
+                                    className={`px-3 py-1.5 rounded-full text-xs font-sans border transition-all ${
+                                      isSubActive
+                                        ? 'border-[#C5A059] bg-[#C5A059] text-[#0F0E0D] font-semibold'
+                                        : 'border-[#3A332E] text-gray-400 hover:text-[#C5A059] hover:border-[#C5A059]/60'
                                     }`}
                                   >
-                                    {sub}
+                                    {formatTaxonomyLabel(sub)}
                                   </Link>
                                 );
                               })}
