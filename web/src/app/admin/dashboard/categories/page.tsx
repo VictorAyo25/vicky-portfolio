@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import Link from 'next/link';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
@@ -16,6 +16,8 @@ import {
   categorySlug,
   subCategorySlug,
   orderedCategories,
+  fetchCategoryOrder,
+  saveCategoryOrder,
   type Taxonomy,
 } from '@/lib/taxonomy';
 import { useToast } from '@/context/ToastContext';
@@ -30,7 +32,38 @@ import {
   ChevronDown,
   FolderTree,
   ExternalLink,
+  GripVertical,
 } from 'lucide-react';
+
+/**
+ * Wraps a category card so it can be dragged by an explicit handle.
+ * Handle-only dragging keeps normal page scrolling and the card's own
+ * buttons working, especially on touch.
+ */
+function DraggableCategory({
+  value,
+  onDragEnd,
+  children,
+}: {
+  value: string;
+  onDragEnd: () => void;
+  children: (handleProps: { onPointerDown: (e: React.PointerEvent) => void }) => ReactNode;
+}) {
+  const controls = useDragControls();
+
+  return (
+    <Reorder.Item
+      as="div"
+      value={value}
+      dragListener={false}
+      dragControls={controls}
+      onDragEnd={onDragEnd}
+      className="rounded-2xl border border-[#2F2A26] bg-[#191614] overflow-hidden"
+    >
+      {children({ onPointerDown: (e) => controls.start(e) })}
+    </Reorder.Item>
+  );
+}
 
 type PendingDelete =
   | { kind: 'category'; category: string }
@@ -40,6 +73,8 @@ export default function CategoriesManagerPage() {
   const { showToast } = useToast();
 
   const [taxonomy, setTaxonomy] = useState<Taxonomy>({});
+  // Held as state (not derived) so drag-reordering can rearrange it directly.
+  const [categories, setCategories] = useState<string[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   // Includes trashed posts — deletion is blocked by those too, so the warning
   // must count them or it contradicts the guard in deleteCategory().
@@ -63,8 +98,9 @@ export default function CategoriesManagerPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, snapshot] = await Promise.all([
+      const [data, savedOrder, snapshot] = await Promise.all([
         fetchTaxonomy(),
+        fetchCategoryOrder(),
         getDocs(collection(db, 'posts')),
       ]);
 
@@ -87,6 +123,7 @@ export default function CategoriesManagerPage() {
       });
 
       setTaxonomy(data);
+      setCategories(orderedCategories(data, savedOrder));
       setCounts(tally);
       setTotalCounts(totals);
     } catch (err) {
@@ -101,7 +138,22 @@ export default function CategoriesManagerPage() {
     void load();
   }, [load]);
 
-  const categories = useMemo(() => orderedCategories(taxonomy), [taxonomy]);
+  // Latest list in a ref so the drag-end handler saves what's on screen
+  // rather than a value captured when the drag began.
+  const listRef = useRef<string[]>([]);
+  useEffect(() => {
+    listRef.current = categories;
+  }, [categories]);
+
+  const persistOrder = useCallback(async () => {
+    try {
+      await saveCategoryOrder(listRef.current);
+      showToast('Menu order saved', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to save order', 'error');
+    }
+  }, [showToast]);
 
   const resetEditing = () => {
     setEditingCategory(null);
@@ -254,7 +306,8 @@ export default function CategoriesManagerPage() {
           <h1 className="text-2xl lg:text-3xl font-serif text-[#F3F4F6] mb-2">Categories</h1>
           <p className="text-gray-400 text-sm">
             Rename, add, or remove the sections that organise your work. Renaming updates every post
-            in that section, and old links keep working.
+            in that section, and old links keep working. Drag the handle to change the order they
+            appear in the site menu.
           </p>
         </header>
 
@@ -279,13 +332,19 @@ export default function CategoriesManagerPage() {
         </div>
 
         {/* Category list */}
-        <div className="space-y-3">
-          {categories.length === 0 && (
-            <div className="p-8 text-center text-gray-500 italic rounded-2xl border border-[#2F2A26] bg-[#191614]">
-              No categories yet.
-            </div>
-          )}
+        {categories.length === 0 && (
+          <div className="p-8 text-center text-gray-500 italic rounded-2xl border border-[#2F2A26] bg-[#191614]">
+            No categories yet.
+          </div>
+        )}
 
+        <Reorder.Group
+          as="div"
+          axis="y"
+          values={categories}
+          onReorder={setCategories}
+          className="space-y-3"
+        >
           {categories.map((category) => {
             const subs = taxonomy[category] ?? [];
             const isOpen = expanded === category;
@@ -293,11 +352,18 @@ export default function CategoriesManagerPage() {
             const isEditing = editingCategory === category;
 
             return (
-              <div
-                key={category}
-                className="rounded-2xl border border-[#2F2A26] bg-[#191614] overflow-hidden"
-              >
+              <DraggableCategory key={category} value={category} onDragEnd={persistOrder}>
+                {(handleProps) => (
+                <>
                 <div className="px-4 py-4 sm:px-5 flex items-center gap-3">
+                  <button
+                    {...handleProps}
+                    className="shrink-0 -ml-1 p-1 text-gray-600 hover:text-[#C5A059] cursor-grab active:cursor-grabbing touch-none transition-colors"
+                    title="Drag to reorder"
+                    aria-label={`Reorder ${category}`}
+                  >
+                    <GripVertical size={16} />
+                  </button>
                   {isEditing ? (
                     <div className="flex-1 flex flex-wrap items-center gap-2">
                       <input
@@ -526,10 +592,12 @@ export default function CategoriesManagerPage() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+                </>
+                )}
+              </DraggableCategory>
             );
           })}
-        </div>
+        </Reorder.Group>
       </motion.div>
 
       <ConfirmModal

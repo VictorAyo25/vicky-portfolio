@@ -67,6 +67,7 @@ export const INITIAL_TAXONOMY: Taxonomy = {
 export const TAXONOMY_DOC_ID = 'structure';
 export const TAXONOMY_COLLECTION = 'taxonomy';
 export const ALIASES_DOC_ID = 'aliases';
+export const ORDER_DOC_ID = 'order';
 
 /** Firestore caps a batch at 500 writes; stay under it with headroom. */
 const BATCH_LIMIT = 450;
@@ -84,21 +85,42 @@ export interface TaxonomyAliases {
  * Categories in a stable, intentional order.
  *
  * Firestore returns map keys in an arbitrary order, so reading the live
- * taxonomy directly scrambles the menu. Known categories keep the curated
- * order defined in INITIAL_TAXONOMY; anything added later is appended
- * alphabetically so the result is always deterministic.
+ * taxonomy directly scrambles the menu. Precedence:
+ *   1. the order saved from the admin, when present
+ *   2. the curated order defined in INITIAL_TAXONOMY
+ *   3. alphabetical, so the result is always deterministic
  */
-export function orderedCategories(taxonomy: Taxonomy): string[] {
+export function orderedCategories(taxonomy: Taxonomy, savedOrder?: string[]): string[] {
   const curated = Object.keys(INITIAL_TAXONOMY);
-  const rankOf = (name: string) => {
-    const index = curated.indexOf(name);
+
+  const rankIn = (list: string[], name: string) => {
+    const index = list.indexOf(name);
     return index === -1 ? Number.MAX_SAFE_INTEGER : index;
   };
 
   return Object.keys(taxonomy).sort((a, b) => {
-    const rankDiff = rankOf(a) - rankOf(b);
-    return rankDiff !== 0 ? rankDiff : a.localeCompare(b);
+    if (savedOrder?.length) {
+      const savedDiff = rankIn(savedOrder, a) - rankIn(savedOrder, b);
+      if (savedDiff !== 0) return savedDiff;
+    }
+    const curatedDiff = rankIn(curated, a) - rankIn(curated, b);
+    return curatedDiff !== 0 ? curatedDiff : a.localeCompare(b);
   });
+}
+
+export async function fetchCategoryOrder(): Promise<string[]> {
+  try {
+    const snap = await getDoc(doc(db, TAXONOMY_COLLECTION, ORDER_DOC_ID));
+    const value = snap.exists() ? (snap.data() as { categories?: string[] }).categories : undefined;
+    return Array.isArray(value) ? value : [];
+  } catch (error) {
+    console.error('Error fetching category order:', error);
+    return [];
+  }
+}
+
+export async function saveCategoryOrder(order: string[]): Promise<void> {
+  await setDoc(doc(db, TAXONOMY_COLLECTION, ORDER_DOC_ID), { categories: order });
 }
 
 /**

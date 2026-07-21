@@ -4,18 +4,20 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, ArrowRight, ChevronDown, Compass } from 'lucide-react';
-import { fetchTaxonomy, orderedCategories, Taxonomy } from '@/lib/taxonomy';
+import { fetchTaxonomy, fetchCategoryOrder, orderedCategories, Taxonomy } from '@/lib/taxonomy';
 
 export default function CategoriesIndexPage() {
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
 
   useEffect(() => {
     async function loadTaxonomy() {
       try {
-        const data = await fetchTaxonomy();
+        const [data, order] = await Promise.all([fetchTaxonomy(), fetchCategoryOrder()]);
         setTaxonomy(data);
+        setCategoryOrder(order);
       } catch (error) {
         console.error('Failed to load categories:', error);
       } finally {
@@ -34,7 +36,7 @@ export default function CategoriesIndexPage() {
     );
   }
 
-  const categories = taxonomy ? orderedCategories(taxonomy) : [];
+  const categories = taxonomy ? orderedCategories(taxonomy, categoryOrder) : [];
 
   return (
     <main className="min-h-screen bg-[#0F0E0D] px-6 py-24 pb-32">

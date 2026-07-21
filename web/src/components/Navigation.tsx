@@ -7,6 +7,7 @@ import { Menu, X, ChevronDown, ArrowRight, Play, Sun, Moon, Download } from 'luc
 import {
   INITIAL_TAXONOMY,
   fetchTaxonomy,
+  fetchCategoryOrder,
   formatTaxonomyLabel,
   orderedCategories,
   type Taxonomy,
@@ -26,13 +27,16 @@ export default function Navigation() {
   // replaced with the live one so categories created in the admin show up
   // without a redeploy.
   const [taxonomy, setTaxonomy] = useState<Taxonomy>(INITIAL_TAXONOMY);
-  const navLinks = orderedCategories(taxonomy);
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
+  const navLinks = orderedCategories(taxonomy, categoryOrder);
 
   useEffect(() => {
     let cancelled = false;
-    fetchTaxonomy()
-      .then((data) => {
-        if (!cancelled) setTaxonomy(data);
+    Promise.all([fetchTaxonomy(), fetchCategoryOrder()])
+      .then(([data, order]) => {
+        if (cancelled) return;
+        setTaxonomy(data);
+        setCategoryOrder(order);
       })
       .catch((err) => console.error('Failed to load taxonomy for navigation:', err));
     return () => {
