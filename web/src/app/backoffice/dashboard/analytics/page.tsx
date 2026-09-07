@@ -340,6 +340,32 @@ export default function AnalyticsPage() {
     [dotClicks]
   );
 
+  // Locked-down site: link clicks that were cancelled, and page URLs that were
+  // refused and shown the 404. Uses the raw visitor list (not the geo-filtered
+  // one) so attempts still show when the location comes back Unknown.
+  const blockedClicks = useMemo(() => {
+    const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 7 * 24 : 30 * 24;
+    const cutoff = Date.now() - hours * 60 * 60 * 1000;
+    return visitors
+      .filter((v) => v.eventType === 'event' && v.eventName === 'blocked_link_click')
+      .filter((v) => (v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0) >= cutoff)
+      .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+  }, [visitors, timeRange]);
+
+  const blockedAttempts = useMemo(() => {
+    const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 7 * 24 : 30 * 24;
+    const cutoff = Date.now() - hours * 60 * 60 * 1000;
+    return visitors
+      .filter((v) => v.eventType === 'event' && v.eventName === 'blocked_attempt')
+      .filter((v) => (v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0) >= cutoff)
+      .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+  }, [visitors, timeRange]);
+
+  const blockedUniqueVisitors = useMemo(
+    () => new Set([...blockedClicks, ...blockedAttempts].map((v) => v.visitorId || v.ip || v.id)).size,
+    [blockedClicks, blockedAttempts]
+  );
+
   if (loading) {
     return (
       <div className="p-6 lg:p-10">
@@ -723,6 +749,131 @@ export default function AnalyticsPage() {
                   </table>
                 </div>
               )}
+            </div>
+
+            {/* Access Attempts — the public site is locked to the homepage */}
+            <div className="bg-[#191614] border border-[#C5A059]/40 rounded-2xl p-6">
+              <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
+                    <Eye size={20} className="text-[#C5A059]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif text-[#F3F4F6]">Access Attempts</h2>
+                    <p className="text-xs text-gray-500 font-sans">Every link click and page visit the lock turned away</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-center">
+                    <p className="text-2xl font-serif text-[#C5A059] leading-none">{blockedClicks.length}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Blocked Clicks</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-serif text-[#C5A059] leading-none">{blockedAttempts.length}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Blocked Pages</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-serif text-[#C5A059] leading-none">{blockedUniqueVisitors}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">People</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Share2 size={14} className="text-[#C5A059]" />
+                    <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold">Blocked Link Clicks</p>
+                  </div>
+                  {blockedClicks.length === 0 ? (
+                    <p className="text-sm text-gray-500 font-sans py-6 text-center">No blocked clicks in this range.</p>
+                  ) : (
+                    <div className="overflow-auto max-h-[320px] pr-2">
+                      <table className="w-full text-left border-collapse font-sans">
+                        <thead>
+                          <tr className="border-b border-[#2F2A26] text-xs uppercase tracking-widest text-gray-500">
+                            <th className="py-3 px-3 font-semibold">Time</th>
+                            <th className="py-3 px-3 font-semibold">Tried to open</th>
+                            <th className="py-3 px-3 font-semibold">Location</th>
+                            <th className="py-3 px-3 font-semibold">Device</th>
+                            <th className="py-3 px-3 font-semibold">IP</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#2F2A26]/50">
+                          {blockedClicks.map((v) => {
+                            const flag = getFlagForName(v.country);
+                            const timeStr = formatVisitTime(v.timestamp);
+                            const { device, browser } = parseUA(v.userAgent || '');
+                            const to = v.eventMetadata?.to || '';
+                            const label = v.eventMetadata?.label || '';
+                            return (
+                              <tr key={v.id} className="text-sm align-top hover:bg-[#201C1A]/50 transition-colors">
+                                <td className="py-3 px-3 text-gray-400 font-mono whitespace-nowrap">{timeStr}</td>
+                                <td className="py-3 px-3">
+                                  <span className="inline-flex flex-col">
+                                    {label && <span className="text-[#C5A059] text-xs">{label}</span>}
+                                    <span className="text-[11px] text-gray-500 font-mono break-all">{to}</span>
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-gray-300 whitespace-nowrap">
+                                  <span className="text-base mr-1.5 select-none" role="img">{flag}</span>
+                                  {v.city && v.city !== 'Unknown' ? `${v.city}, ${v.country}` : v.country}
+                                </td>
+                                <td className="py-3 px-3 text-gray-300 whitespace-nowrap">{device} · {browser}</td>
+                                <td className="py-3 px-3 text-gray-500 font-mono whitespace-nowrap">{v.ip || '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Globe size={14} className="text-[#C5A059]" />
+                    <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold">Blocked Page Attempts</p>
+                  </div>
+                  {blockedAttempts.length === 0 ? (
+                    <p className="text-sm text-gray-500 font-sans py-6 text-center">No blocked page attempts in this range.</p>
+                  ) : (
+                    <div className="overflow-auto max-h-[320px] pr-2">
+                      <table className="w-full text-left border-collapse font-sans">
+                        <thead>
+                          <tr className="border-b border-[#2F2A26] text-xs uppercase tracking-widest text-gray-500">
+                            <th className="py-3 px-3 font-semibold">Time</th>
+                            <th className="py-3 px-3 font-semibold">Attempted URL</th>
+                            <th className="py-3 px-3 font-semibold">Location</th>
+                            <th className="py-3 px-3 font-semibold">Device</th>
+                            <th className="py-3 px-3 font-semibold">IP</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#2F2A26]/50">
+                          {blockedAttempts.map((v) => {
+                            const flag = getFlagForName(v.country);
+                            const timeStr = formatVisitTime(v.timestamp);
+                            const { device, browser } = parseUA(v.userAgent || '');
+                            const attempted = v.eventMetadata?.path || v.page || '';
+                            return (
+                              <tr key={v.id} className="text-sm align-top hover:bg-[#201C1A]/50 transition-colors">
+                                <td className="py-3 px-3 text-gray-400 font-mono whitespace-nowrap">{timeStr}</td>
+                                <td className="py-3 px-3 text-[#C5A059] font-mono break-all">{attempted}</td>
+                                <td className="py-3 px-3 text-gray-300 whitespace-nowrap">
+                                  <span className="text-base mr-1.5 select-none" role="img">{flag}</span>
+                                  {v.city && v.city !== 'Unknown' ? `${v.city}, ${v.country}` : v.country}
+                                </td>
+                                <td className="py-3 px-3 text-gray-300 whitespace-nowrap">{device} · {browser}</td>
+                                <td className="py-3 px-3 text-gray-500 font-mono whitespace-nowrap">{v.ip || '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Conversions, User Agents and Recent Activity */}

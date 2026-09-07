@@ -81,6 +81,25 @@ export function usePageTracking() {
 
     const visitorId = getVisitorId();
 
+    // The public site is locked to the homepage. Any other path renders the
+    // 404, so record it as a blocked page attempt instead of a real view.
+    if (pathname !== '/') {
+      const blockedName = getVisitorName();
+      fetch('/api/analytics/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          page: pathname,
+          visitorId,
+          visitorName: blockedName,
+          eventType: 'event',
+          eventName: 'blocked_attempt',
+          eventMetadata: { path: pathname },
+        }),
+      }).catch(() => {});
+      return;
+    }
+
     // Get referrer / source parameters
     let referrer = '';
 
