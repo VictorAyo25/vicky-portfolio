@@ -5,6 +5,7 @@ import ConditionalNavigation from "@/components/ConditionalNavigation";
 import { ToastProvider } from "@/context/ToastContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import ClientLayout from "./ClientLayout";
+import CornerDot from "@/components/CornerDot";
 import { SITE_URL, SITE_NAME } from "@/lib/site";
 
 const playfair = Playfair_Display({
@@ -89,13 +90,8 @@ export default function RootLayout({
                 {children}
               </ClientLayout>
 
-              {/* Admin access — small but clickable dot */}
-              <a
-                href="/admin"
-                aria-label="Admin"
-                title="Admin Portal"
-                className="fixed bottom-4 right-4 z-50 w-3 h-3 rounded-full bg-gold/25 hover:bg-gold/70 transition-colors duration-300"
-              />
+              {/* Corner dot — goes nowhere, but logs each click for the dashboard */}
+              <CornerDot />
           </ToastProvider>
         </ThemeProvider>
       </body>

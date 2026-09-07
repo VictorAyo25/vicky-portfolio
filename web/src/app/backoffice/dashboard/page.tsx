@@ -99,7 +99,7 @@ export default function DashboardOverview() {
             </div>
           </motion.div>
           
-          <Link href="/admin/dashboard/posts/new">
+          <Link href="/backoffice/dashboard/posts/new">
              <motion.div
               whileHover={{ y: -5 }}
               className="p-6 h-full flex flex-col justify-center items-center bg-[#0F0E0D] border border-dashed border-[#59514A] hover:border-[#C5A059] rounded-2xl text-gray-400 hover:text-[#C5A059] cursor-pointer transition-all duration-300 group"
@@ -126,7 +126,7 @@ export default function DashboardOverview() {
                 Object.entries(categoryStats).map(([cat, info]) => (
                   <Link
                     key={cat}
-                    href={`/admin/dashboard/posts?category=${encodeURIComponent(cat)}`}
+                    href={`/backoffice/dashboard/posts?category=${encodeURIComponent(cat)}`}
                     className="block"
                     title={`Manage ${cat} posts`}
                   >

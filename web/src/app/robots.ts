@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: '*',
       allow: '/',
       // The admin area and internal APIs have no business in search results.
-      disallow: ['/admin', '/admin/', '/api/'],
+      disallow: ['/backoffice', '/backoffice/', '/api/'],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };

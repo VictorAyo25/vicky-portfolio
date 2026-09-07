@@ -12,8 +12,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !user && pathname !== '/admin/login') {
-      router.push('/admin/login');
+    if (!loading && !user && pathname !== '/backoffice/login') {
+      router.push('/backoffice/login');
     }
   }, [user, loading, router, pathname]);
 
@@ -26,13 +26,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   // If on login page and already authenticated, redirect to dashboard
-  if (user && pathname === '/admin/login') {
-    router.replace('/admin/dashboard');
+  if (user && pathname === '/backoffice/login') {
+    router.replace('/backoffice/dashboard');
     return null;
   }
 
   // If not logged in and not on login page, render nothing until redirect
-  if (!user && pathname !== '/admin/login') return null;
+  if (!user && pathname !== '/backoffice/login') return null;
 
   return <>{children}</>;
 }

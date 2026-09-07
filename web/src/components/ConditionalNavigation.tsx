@@ -6,7 +6,7 @@ import Navigation from '@/components/Navigation';
 export default function ConditionalNavigation() {
   const pathname = usePathname();
 
-  if (pathname?.startsWith('/admin') || pathname === '/cv') {
+  if (pathname?.startsWith('/backoffice') || pathname === '/cv') {
     return null;
   }
 

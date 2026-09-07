@@ -67,7 +67,7 @@ export function usePageTracking() {
 
   useEffect(() => {
     // Skip admin pages
-    if (pathname.startsWith('/admin')) return;
+    if (pathname.startsWith('/backoffice')) return;
 
     // Already fired for this path during this component mount cycle
     if (firedForPath.current === pathname) return;

@@ -19,7 +19,7 @@ export default function AdminLogin() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push('/admin/dashboard');
+      router.push('/backoffice/dashboard');
     } catch (err: unknown) {
       const error = err as any;
       if (

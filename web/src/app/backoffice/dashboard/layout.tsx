@@ -18,15 +18,15 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   const isActive = (path: string) => pathname === path;
 
   const navItems = [
-    { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
-    { href: '/admin/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
-    { href: '/admin/dashboard/home', icon: Home, label: 'Home Page' },
-    { href: '/admin/dashboard/posts', icon: FileText, label: 'Posts Manager', isParent: true },
-    { href: '/admin/dashboard/posts/new', icon: FileText, label: 'Add New', indent: true },
-    { href: '/admin/dashboard/about', icon: FileText, label: 'About Page' },
-    { href: '/admin/dashboard/media', icon: ImageIcon, label: 'Media Library' },
-    { href: '/admin/dashboard/settings', icon: Settings, label: 'Settings' },
-    { href: '/admin/dashboard/trash', icon: Trash, label: 'Trash', danger: true },
+    { href: '/backoffice/dashboard', icon: LayoutDashboard, label: 'Overview' },
+    { href: '/backoffice/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
+    { href: '/backoffice/dashboard/home', icon: Home, label: 'Home Page' },
+    { href: '/backoffice/dashboard/posts', icon: FileText, label: 'Posts Manager', isParent: true },
+    { href: '/backoffice/dashboard/posts/new', icon: FileText, label: 'Add New', indent: true },
+    { href: '/backoffice/dashboard/about', icon: FileText, label: 'About Page' },
+    { href: '/backoffice/dashboard/media', icon: ImageIcon, label: 'Media Library' },
+    { href: '/backoffice/dashboard/settings', icon: Settings, label: 'Settings' },
+    { href: '/backoffice/dashboard/trash', icon: Trash, label: 'Trash', danger: true },
   ];
 
   const handleNavClick = () => {
@@ -70,20 +70,20 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
           </Link>
 
           <div className="text-[10px] uppercase font-bold text-gray-600 tracking-widest px-3 mb-2">Dashboard</div>
-          <Link href="/admin/dashboard" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-300 hover:text-[#C5A059] hover:bg-[#2F2A26]/30'}`}>
+          <Link href="/backoffice/dashboard" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/backoffice/dashboard') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-300 hover:text-[#C5A059] hover:bg-[#2F2A26]/30'}`}>
             <LayoutDashboard size={18} /> Overview
           </Link>
-          <Link href="/admin/dashboard/analytics" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/analytics') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-300 hover:text-[#C5A059] hover:bg-[#2F2A26]/30'}`}>
+          <Link href="/backoffice/dashboard/analytics" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/backoffice/dashboard/analytics') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-300 hover:text-[#C5A059] hover:bg-[#2F2A26]/30'}`}>
             <BarChart3 size={18} /> Analytics
           </Link>
 
           <div className="mt-4 mb-2 text-[10px] uppercase font-bold text-gray-600 tracking-widest px-3 pt-3 border-t border-[#2F2A26]">Content</div>
 
-          <Link href="/admin/dashboard/home" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/home') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
+          <Link href="/backoffice/dashboard/home" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/backoffice/dashboard/home') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
             <Home size={18} /> Home Page
           </Link>
 
-          <button onClick={() => setPostsOpen(!postsOpen)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors ${pathname.includes('/posts') && !isActive('/admin/dashboard') ? 'text-[#C5A059] font-medium' : 'text-gray-300 hover:text-[#C5A059] hover:bg-[#2F2A26]/30'}`}>
+          <button onClick={() => setPostsOpen(!postsOpen)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors ${pathname.includes('/posts') && !isActive('/backoffice/dashboard') ? 'text-[#C5A059] font-medium' : 'text-gray-300 hover:text-[#C5A059] hover:bg-[#2F2A26]/30'}`}>
             <div className="flex items-center gap-3"><FileText size={18} />Posts Manager</div>
             <ChevronRight size={16} className={`transition-transform duration-200 ${postsOpen ? 'rotate-90' : ''}`} />
           </button>
@@ -91,28 +91,28 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
           <AnimatePresence>
             {postsOpen && (
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="pl-9 space-y-1 overflow-hidden">
-                <Link href="/admin/dashboard/posts" onClick={handleNavClick} className={`block px-3 py-2 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/posts') ? 'text-[#C5A059] bg-[#C5A059]/10 font-medium' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>All Posts</Link>
-                <Link href="/admin/dashboard/posts/new" onClick={handleNavClick} className={`block px-3 py-2 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/posts/new') ? 'text-[#C5A059] bg-[#C5A059]/10 font-medium' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>Add New</Link>
+                <Link href="/backoffice/dashboard/posts" onClick={handleNavClick} className={`block px-3 py-2 rounded-lg text-sm transition-colors ${isActive('/backoffice/dashboard/posts') ? 'text-[#C5A059] bg-[#C5A059]/10 font-medium' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>All Posts</Link>
+                <Link href="/backoffice/dashboard/posts/new" onClick={handleNavClick} className={`block px-3 py-2 rounded-lg text-sm transition-colors ${isActive('/backoffice/dashboard/posts/new') ? 'text-[#C5A059] bg-[#C5A059]/10 font-medium' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>Add New</Link>
               </motion.div>
             )}
           </AnimatePresence>
 
-          <Link href="/admin/dashboard/categories" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/categories') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
+          <Link href="/backoffice/dashboard/categories" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/backoffice/dashboard/categories') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
             <FolderTree size={18} /> Categories
           </Link>
 
-          <Link href="/admin/dashboard/about" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/about') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
+          <Link href="/backoffice/dashboard/about" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/backoffice/dashboard/about') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
             <FileText size={18} /> About Page
           </Link>
-          <Link href="/admin/dashboard/media" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/media') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
+          <Link href="/backoffice/dashboard/media" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/backoffice/dashboard/media') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
             <ImageIcon size={18} /> Media Library
           </Link>
 
           <div className="mt-4 mb-2 text-[10px] uppercase font-bold text-gray-600 tracking-widest px-3 pt-3 border-t border-[#2F2A26]">System</div>
-          <Link href="/admin/dashboard/settings" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/settings') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
+          <Link href="/backoffice/dashboard/settings" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/backoffice/dashboard/settings') ? 'bg-[#C5A059] text-black font-semibold' : 'text-gray-400 hover:text-white hover:bg-[#2F2A26]/30'}`}>
             <Settings size={18} /> Settings
           </Link>
-          <Link href="/admin/dashboard/trash" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/admin/dashboard/trash') ? 'bg-red-500/10 text-red-500 font-medium' : 'text-gray-400 hover:text-red-400 hover:bg-red-400/10'}`}>
+          <Link href="/backoffice/dashboard/trash" onClick={handleNavClick} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive('/backoffice/dashboard/trash') ? 'bg-red-500/10 text-red-500 font-medium' : 'text-gray-400 hover:text-red-400 hover:bg-red-400/10'}`}>
             <Trash size={18} /> Trash
           </Link>
         </nav>

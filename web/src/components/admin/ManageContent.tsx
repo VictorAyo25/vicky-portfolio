@@ -299,7 +299,7 @@ export default function ManageContent({
             ) : (
                 <>
                     <Link
-                        href={`/admin/dashboard/posts/${post.id}`}
+                        href={`/backoffice/dashboard/posts/${post.id}`}
                         className="px-3 py-3 text-blue-400 hover:bg-blue-400/10 active:scale-[0.97] rounded-lg transition-all min-h-11 min-w-11 inline-flex items-center justify-center gap-2"
                         title="Edit Post"
                     >
@@ -347,7 +347,7 @@ export default function ManageContent({
                                     </span>
                                 )}
                                 <Link
-                                    href="/admin/dashboard/posts"
+                                    href="/backoffice/dashboard/posts"
                                     className="text-xs text-gray-400 hover:text-[#F3F4F6] underline underline-offset-4"
                                 >
                                     Clear filter
@@ -357,7 +357,7 @@ export default function ManageContent({
                     </div>
                     {!isTrash && (
                         <Link
-                            href="/admin/dashboard/posts/new"
+                            href="/backoffice/dashboard/posts/new"
                             className="bg-[#C5A059] text-black px-6 py-3 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-[#d4b06a] active:scale-[0.98] transition-all min-h-11 inline-flex items-center justify-center self-start lg:self-auto"
                         >
                             Create New

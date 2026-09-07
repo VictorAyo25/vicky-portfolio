@@ -322,6 +322,24 @@ export default function AnalyticsPage() {
     };
   }, [filteredVisitors]);
 
+  // Secret corner-dot clicks — logged from the little gold dot in the corner.
+  // Uses the raw visitor list (not the geo-filtered one) so a click still
+  // shows up even when the location came back as Unknown, and applies only
+  // the selected time range.
+  const dotClicks = useMemo(() => {
+    const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 7 * 24 : 30 * 24;
+    const cutoff = Date.now() - hours * 60 * 60 * 1000;
+    return visitors
+      .filter((v) => v.eventType === 'event' && v.eventName === 'corner_dot_click')
+      .filter((v) => (v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0) >= cutoff)
+      .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+  }, [visitors, timeRange]);
+
+  const dotClickUniqueVisitors = useMemo(
+    () => new Set(dotClicks.map((v) => v.visitorId || v.ip || v.id)).size,
+    [dotClicks]
+  );
+
   if (loading) {
     return (
       <div className="p-6 lg:p-10">
@@ -637,6 +655,74 @@ export default function AnalyticsPage() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Secret Corner-Dot Clicks */}
+            <div className="bg-[#191614] border border-[#C5A059]/40 rounded-2xl p-6">
+              <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-[#C5A059]/10 flex items-center justify-center">
+                    <Eye size={20} className="text-[#C5A059]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif text-[#F3F4F6]">Secret Dot</h2>
+                    <p className="text-xs text-gray-500 font-sans">Who tapped the little corner dot — and from where</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-center">
+                    <p className="text-2xl font-serif text-[#C5A059] leading-none">{dotClicks.length}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Total Clicks</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-serif text-[#C5A059] leading-none">{dotClickUniqueVisitors}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">People</p>
+                  </div>
+                </div>
+              </div>
+              {dotClicks.length === 0 ? (
+                <p className="text-sm text-gray-500 font-sans py-6 text-center">
+                  No one has clicked the dot in this time range yet.
+                </p>
+              ) : (
+                <div className="overflow-auto max-h-[360px] pr-2">
+                  <table className="w-full text-left border-collapse font-sans">
+                    <thead>
+                      <tr className="border-b border-[#2F2A26] text-xs uppercase tracking-widest text-gray-500">
+                        <th className="py-3 px-4 font-semibold">Time</th>
+                        <th className="py-3 px-4 font-semibold">Location</th>
+                        <th className="py-3 px-4 font-semibold">Device</th>
+                        <th className="py-3 px-4 font-semibold">IP</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2F2A26]/50">
+                      {dotClicks.map((v) => {
+                        const flag = getFlagForName(v.country);
+                        const timeStr = formatVisitTime(v.timestamp);
+                        const { device, browser } = parseUA(v.userAgent || '');
+                        return (
+                          <tr key={v.id} className="text-sm hover:bg-[#201C1A]/50 transition-colors">
+                            <td className="py-3.5 px-4 text-gray-400 font-mono whitespace-nowrap">{timeStr}</td>
+                            <td className="py-3.5 px-4 text-gray-300">
+                              <span className="text-base mr-2 select-none" role="img">{flag}</span>
+                              <span className="inline-flex flex-col">
+                                {v.visitorName && (
+                                  <span className="font-semibold text-[#C5A059] text-xs">{v.visitorName}</span>
+                                )}
+                                <span className={v.visitorName ? 'text-[10px] text-gray-500' : 'text-sm text-gray-300'}>
+                                  {v.city && v.city !== 'Unknown' ? `${v.city}, ${v.country}` : v.country}
+                                </span>
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-gray-300 whitespace-nowrap">{device} · {browser}</td>
+                            <td className="py-3.5 px-4 text-gray-500 font-mono whitespace-nowrap">{v.ip || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             {/* Conversions, User Agents and Recent Activity */}
