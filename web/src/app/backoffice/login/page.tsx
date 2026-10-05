@@ -6,6 +6,7 @@ import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
+import { trackAdminAccess } from '@/lib/analytics';
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
@@ -20,10 +21,16 @@ export default function AdminLogin() {
     setError('');
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      // A real account that isn't the owner gets signed straight back out by
+      // AuthContext — record which it was.
+      const adminUid = process.env.NEXT_PUBLIC_ADMIN_UID;
+      const isOwner = !adminUid || credential.user.uid === adminUid;
+      trackAdminAccess(isOwner ? 'login' : 'not_admin', { email: email.slice(0, 120) });
       router.push('/backoffice/dashboard');
     } catch (err: unknown) {
       const error = err as any;
+      trackAdminAccess('login_failed', { email: email.slice(0, 120), reason: error?.code || 'unknown' });
       if (
         error?.code === 'auth/invalid-credential' ||
         error?.code === 'auth/user-not-found' ||

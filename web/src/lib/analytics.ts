@@ -60,6 +60,36 @@ export function trackEvent(eventName: string, metadata: Record<string, any> = {}
   }
 }
 
+// Set once the owner signs in on a device, so their own trips to the login
+// page aren't reported as someone else trying to get in.
+const OWNER_DEVICE_KEY = 'vicky_owner_device';
+
+export function markOwnerDevice() {
+  try {
+    localStorage.setItem(OWNER_DEVICE_KEY, '1');
+  } catch {
+    // Fail silently
+  }
+}
+
+export function isOwnerDevice(): boolean {
+  try {
+    return localStorage.getItem(OWNER_DEVICE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+// Guessable admin URLs. The real area is /backoffice, so a hit on any of these
+// (they all 404) is someone hunting for the way in.
+const ADMIN_PROBE_PATH = /^\/(admin|administrator|wp-admin|wp-login\.php|login|signin|sign-in|dashboard|cms|panel|cpanel|user\/login)(\/|$)/i;
+
+export type AdminAccessKind = 'probe' | 'visit' | 'login_failed' | 'not_admin' | 'login';
+
+export function trackAdminAccess(kind: AdminAccessKind, details: Record<string, unknown> = {}) {
+  trackEvent('admin_access', { kind, ownerDevice: isOwnerDevice(), ...details });
+}
+
 export function usePageTracking() {
   const pathname = usePathname();
   // Ref prevents the effect from closing over a stale fired state
@@ -79,26 +109,13 @@ export function usePageTracking() {
     firedForPath.current = pathname;
     recentlyTracked.set(pathname, Date.now());
 
-    const visitorId = getVisitorId();
-
-    // The public site is locked to the homepage. Any other path renders the
-    // 404, so record it as a blocked page attempt instead of a real view.
-    if (pathname !== '/') {
-      const blockedName = getVisitorName();
-      fetch('/api/analytics/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          page: pathname,
-          visitorId,
-          visitorName: blockedName,
-          eventType: 'event',
-          eventName: 'blocked_attempt',
-          eventMetadata: { path: pathname },
-        }),
-      }).catch(() => {});
+    // Someone guessing at an admin URL: log the attempt instead of a page view.
+    if (ADMIN_PROBE_PATH.test(pathname)) {
+      trackAdminAccess('probe', { path: pathname });
       return;
     }
+
+    const visitorId = getVisitorId();
 
     // Get referrer / source parameters
     let referrer = '';

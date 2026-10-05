@@ -3,13 +3,24 @@
 import { AuthProvider } from '@/context/AuthContext';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
+import { isOwnerDevice, trackAdminAccess } from '@/lib/analytics';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const reportedVisit = useRef(false);
+
+  // A signed-out visit to the admin area, logged once per visit (the first
+  // page they hit, before the redirect to login). The owner's own devices are
+  // skipped so only strangers show up.
+  useEffect(() => {
+    if (loading || user || reportedVisit.current) return;
+    reportedVisit.current = true;
+    if (!isOwnerDevice()) trackAdminAccess('visit', { path: pathname });
+  }, [user, loading, pathname]);
 
   useEffect(() => {
     if (!loading && !user && pathname !== '/backoffice/login') {
