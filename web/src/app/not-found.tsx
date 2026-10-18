@@ -1,26 +1,15 @@
-export const metadata = {
-  title: '404',
+import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import OfflineScreen, { platformFromUserAgent } from '@/components/OfflineScreen';
+import { SITE_URL } from '@/lib/site';
+
+// Chrome titles its error pages with the bare host, not the site name.
+export const metadata: Metadata = {
+  title: { absolute: new URL(SITE_URL).host },
+  robots: { index: false, follow: false },
 };
 
-export default function NotFound() {
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        background: '#ffffff',
-        color: '#000000',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        margin: 0,
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: '18px',
-        letterSpacing: '0.02em',
-      }}
-    >
-      Error 404
-    </div>
-  );
+export default async function NotFound() {
+  const userAgent = (await headers()).get('user-agent') || '';
+  return <OfflineScreen platform={platformFromUserAgent(userAgent)} />;
 }
