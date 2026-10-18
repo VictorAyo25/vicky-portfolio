@@ -1,18 +1,36 @@
 /**
- * A look-alike of Chrome's "No internet" page, shown in place of every locked
- * public page. Follows the visitor's light/dark preference and swaps the
- * suggestions for Windows, other desktops, and phones the way Chrome does.
- * Nothing on it is clickable.
+ * A look-alike of the browser's own "no internet" page, shown in place of
+ * every locked public page. Safari visitors get Safari's page (worded for Mac,
+ * iPhone or iPad); everyone else gets Chrome's, with the suggestions Chrome
+ * shows on Windows, other desktops and phones. Both follow the visitor's
+ * light/dark preference. Nothing on it is clickable.
  */
 
-export type Platform = 'windows' | 'desktop' | 'mobile';
+export type OfflineVariant =
+  | { browser: 'chrome'; platform: 'windows' | 'desktop' | 'mobile' }
+  | { browser: 'safari'; device: 'computer' | 'iPhone' | 'iPad' };
 
-export function platformFromUserAgent(ua: string): Platform {
-  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return 'mobile';
-  return /Windows/i.test(ua) ? 'windows' : 'desktop';
+export function offlineVariantFromUserAgent(ua: string): OfflineVariant {
+  // Real Safari only: Chrome, Firefox and Edge on iOS also say "Safari" in
+  // their user agent, but show their own error pages.
+  const isSafari =
+    /Safari\//.test(ua) && /Version\//.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgiOS|Edg\/|OPR\/|Android/.test(ua);
+  if (isSafari) {
+    if (/iPhone|iPod/.test(ua)) return { browser: 'safari', device: 'iPhone' };
+    if (/iPad/.test(ua)) return { browser: 'safari', device: 'iPad' };
+    return { browser: 'safari', device: 'computer' };
+  }
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return { browser: 'chrome', platform: 'mobile' };
+  return { browser: 'chrome', platform: /Windows/i.test(ua) ? 'windows' : 'desktop' };
 }
 
-const SUGGESTIONS: Record<Platform, string[]> = {
+export default function OfflineScreen({ variant }: { variant: OfflineVariant }) {
+  return variant.browser === 'safari' ? <SafariOffline device={variant.device} /> : <ChromeOffline platform={variant.platform} />;
+}
+
+/* ---------------------------------- Chrome --------------------------------- */
+
+const CHROME_SUGGESTIONS = {
   windows: ['Checking the network cables, modem, and router', 'Reconnecting to Wi-Fi'],
   desktop: ['Checking the network cables, modem, and router', 'Reconnecting to Wi-Fi'],
   mobile: ['Turning off airplane mode', 'Turning on mobile data or Wi-Fi', 'Checking the signal in your area'],
@@ -59,7 +77,7 @@ function Dino() {
   );
 }
 
-export default function OfflineScreen({ platform }: { platform: Platform }) {
+function ChromeOffline({ platform }: { platform: 'windows' | 'desktop' | 'mobile' }) {
   return (
     <div className="offline-screen">
       <style>{`
@@ -125,7 +143,7 @@ export default function OfflineScreen({ platform }: { platform: Platform }) {
         <h1>No internet</h1>
         <p>Try:</p>
         <ul>
-          {SUGGESTIONS[platform].map((s) => (
+          {CHROME_SUGGESTIONS[platform].map((s) => (
             <li key={s}>{s}</li>
           ))}
           {platform === 'windows' && (
@@ -135,6 +153,76 @@ export default function OfflineScreen({ platform }: { platform: Platform }) {
           )}
         </ul>
         <div className="offline-code">ERR_INTERNET_DISCONNECTED</div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- Safari --------------------------------- */
+
+function SafariOffline({ device }: { device: 'computer' | 'iPhone' | 'iPad' }) {
+  const isMac = device === 'computer';
+  const title = isMac ? 'You Are Not Connected to the Internet' : 'Safari Cannot Open the Page';
+  const message = isMac
+    ? 'This page can’t be displayed because your computer is currently offline.'
+    : `Safari cannot open the page because your ${device} is not connected to the internet.`;
+
+  return (
+    <div className="safari-offline">
+      <style>{`
+        .safari-offline {
+          --bg: #f0f0f0;
+          --title: #545454;
+          --text: #8a8a8a;
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+          overflow: auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--bg);
+          font-family: -apple-system, system-ui, 'Helvetica Neue', Helvetica, sans-serif;
+          text-align: center;
+          -webkit-font-smoothing: antialiased;
+        }
+        @media (prefers-color-scheme: dark) {
+          .safari-offline {
+            --bg: #1e1e1e;
+            --title: #c8c8c8;
+            --text: #8c8c8c;
+          }
+        }
+        .safari-offline-box {
+          box-sizing: border-box;
+          width: 100%;
+          max-width: 540px;
+          padding: 0 28px;
+          margin-top: -6vh;
+        }
+        .safari-offline h1 {
+          color: var(--title);
+          font-family: inherit;
+          font-size: 21px;
+          font-weight: 700;
+          line-height: 1.25;
+          letter-spacing: normal;
+          margin: 0 0 10px;
+        }
+        .safari-offline p {
+          color: var(--text);
+          font-size: 13px;
+          line-height: 1.45;
+          margin: 0;
+        }
+        @media (max-width: 640px) {
+          .safari-offline h1 { font-size: 22px; }
+          .safari-offline p { font-size: 15px; }
+        }
+      `}</style>
+      <div className="safari-offline-box">
+        <h1>{title}</h1>
+        <p>{message}</p>
       </div>
     </div>
   );
