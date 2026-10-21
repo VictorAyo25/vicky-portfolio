@@ -41,18 +41,18 @@ export default function SinglePostPage() {
   useEffect(() => {
     async function fetchPost() {
       try {
-        const q = query(collection(db, 'posts'), where('slug', '==', slug), limit(1));
+        // Trashed or unpublished copies can share a slug with the live post
+        // (e.g. after a re-import), so pick the live one rather than whichever
+        // match comes back first.
+        const q = query(collection(db, 'posts'), where('slug', '==', slug));
         const querySnapshot = await getDocs(q);
+        const docSnapshot = querySnapshot.docs.find((d) => {
+          const data = d.data() as Omit<Post, 'id'>;
+          return !data.deleted && data.published !== false;
+        });
 
-        if (!querySnapshot.empty) {
-          const docSnapshot = querySnapshot.docs[0];
+        if (docSnapshot) {
           const data = docSnapshot.data() as Omit<Post, 'id'>;
-
-          if (data.deleted || data.published === false) {
-            setMissing(true);
-            return;
-          }
-
           const postData = { id: docSnapshot.id, ...data } as Post;
           setPost(postData);
 

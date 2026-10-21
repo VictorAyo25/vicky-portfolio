@@ -40,11 +40,13 @@ type PostLookup =
 
 async function getPost(slug: string): Promise<PostLookup> {
   try {
-    const snap = await adminDb.collection('posts').where('slug', '==', slug).limit(1).get();
-    if (!snap.docs?.length) return { status: 'missing' };
-    const post = snap.docs[0].data() as PostDoc;
-    if (post.deleted || post.published === false) return { status: 'missing' };
-    return { status: 'ok', post };
+    // Trashed or unpublished copies can share a slug with the live post (e.g.
+    // after a re-import), so look past them instead of taking the first match.
+    const snap = await adminDb.collection('posts').where('slug', '==', slug).get();
+    const post = (snap.docs ?? [])
+      .map((d: { data: () => PostDoc }) => d.data())
+      .find((p: PostDoc) => !p.deleted && p.published !== false);
+    return post ? { status: 'ok', post } : { status: 'missing' };
   } catch (error) {
     console.error('post lookup failed, falling back to client render:', error);
     return { status: 'error' };
