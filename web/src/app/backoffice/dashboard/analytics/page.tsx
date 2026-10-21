@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { useEffect, useState, useMemo } from 'react';
-import { Globe, MapPin, Users, TrendingUp, FileText, Eye, Share2, Laptop, CheckCircle, FileDown, ShieldAlert } from 'lucide-react';
+import { Globe, MapPin, Users, TrendingUp, FileText, Eye, Share2, Laptop, CheckCircle, FileDown, ShieldAlert, CalendarRange } from 'lucide-react';
 
 interface VisitorRecord {
   id: string;
@@ -29,20 +29,89 @@ interface LocationCount {
   percentage: number;
 }
 
+type PresetRange = '1h' | '3h' | '6h' | '12h' | '24h' | '7d' | '30d';
+type TimeRange = PresetRange | 'custom';
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MINUTES = 24 * 60;
+
+// Preset windows, how far back each reaches, and how finely the trend chart
+// buckets it.
+const PRESET_RANGES: { key: PresetRange; button: string; label: string; hours: number; bucketMinutes: number }[] = [
+  { key: '1h', button: '1H', label: 'Last 1 Hour', hours: 1, bucketMinutes: 5 },
+  { key: '3h', button: '3H', label: 'Last 3 Hours', hours: 3, bucketMinutes: 15 },
+  { key: '6h', button: '6H', label: 'Last 6 Hours', hours: 6, bucketMinutes: 30 },
+  { key: '12h', button: '12H', label: 'Last 12 Hours', hours: 12, bucketMinutes: 60 },
+  { key: '24h', button: '24H', label: 'Last 24 Hours', hours: 24, bucketMinutes: 60 },
+  { key: '7d', button: '7D', label: 'Last 7 Days', hours: 7 * 24, bucketMinutes: DAY_MINUTES },
+  { key: '30d', button: '30D', label: 'Last 30 Days', hours: 30 * 24, bucketMinutes: DAY_MINUTES },
+];
+
+const tsOf = (v: VisitorRecord) => (v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0);
+
+// Local "YYYY-MM-DDTHH:mm", the format a datetime-local input reads and writes.
+function toInputValue(ms: number) {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const formatRangeEdge = (ms: number) =>
+  new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+// Page views per slot for the trend chart, aligned to local clock time:
+// N-minute slots for short windows, local calendar days for long ones.
+function buildTrendBuckets(views: VisitorRecord[], start: number, end: number, bucketMinutes: number) {
+  const daily = bucketMinutes >= DAY_MINUTES;
+  const floor = (ts: number) => {
+    const d = new Date(ts);
+    if (daily) return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    d.setSeconds(0, 0);
+    d.setMinutes(Math.floor(d.getMinutes() / bucketMinutes) * bucketMinutes);
+    return d.getTime();
+  };
+  const next = (ts: number) => {
+    if (!daily) return ts + bucketMinutes * 60 * 1000;
+    const d = new Date(ts);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
+  };
+  const spansDays = end - start > 24 * HOUR_MS;
+
+  const buckets = new Map<number, { label: string; count: number }>();
+  for (let t = floor(start); t <= end; t = next(t)) {
+    const d = new Date(t);
+    const label = daily
+      ? d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+      : spansDays
+        ? d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    buckets.set(t, { label, count: 0 });
+  }
+  views.forEach((v) => {
+    const bucket = buckets.get(floor(tsOf(v)));
+    if (bucket) bucket.count++;
+  });
+  return [...buckets.values()];
+}
+
 export default function AnalyticsPage() {
   const [visitors, setVisitors] = useState<VisitorRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('7d');
+  const [timeRange, setTimeRange] = useState<TimeRange>('7d');
+  // The applied custom window, and the picker values being edited before Apply.
+  const [customRange, setCustomRange] = useState<{ start: number; end: number } | null>(null);
+  const [customDraft, setCustomDraft] = useState({ from: '', to: '' });
+  const [showCustom, setShowCustom] = useState(false);
+  // Earliest moment loaded from Firestore. A custom range reaching further
+  // back moves it and triggers a reload.
+  const [loadedFrom, setLoadedFrom] = useState(() => Date.now() - 30 * 24 * HOUR_MS);
 
   useEffect(() => {
     async function fetchVisitors() {
       try {
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - 30);
-
         const q = query(
           collection(db, 'analytics_visitors'),
-          where('timestamp', '>=', cutoffDate),
+          where('timestamp', '>=', new Date(loadedFrom)),
           orderBy('timestamp', 'desc')
         );
         const snapshot = await getDocs(q);
@@ -58,7 +127,42 @@ export default function AnalyticsPage() {
       }
     }
     fetchVisitors();
-  }, []);
+  }, [loadedFrom]);
+
+  // The selected window in ms. Presets end at the moment they were picked.
+  const range = useMemo(() => {
+    if (timeRange === 'custom' && customRange) return customRange;
+    const preset = PRESET_RANGES.find((p) => p.key === timeRange) ?? PRESET_RANGES[5];
+    const end = Date.now();
+    return { start: end - preset.hours * HOUR_MS, end };
+  }, [timeRange, customRange]);
+
+  const periodLabel =
+    timeRange === 'custom' && customRange
+      ? `${formatRangeEdge(customRange.start)} – ${formatRangeEdge(customRange.end)}`
+      : PRESET_RANGES.find((p) => p.key === timeRange)?.label ?? '';
+
+  const customValid =
+    !!customDraft.from && !!customDraft.to && new Date(customDraft.from).getTime() < new Date(customDraft.to).getTime();
+
+  function openCustom() {
+    // Start the pickers on whatever window is showing now.
+    setCustomDraft({ from: toInputValue(range.start), to: toInputValue(range.end) });
+    setShowCustom(true);
+  }
+
+  function applyCustomRange() {
+    if (!customValid) return;
+    const start = new Date(customDraft.from).getTime();
+    const end = new Date(customDraft.to).getTime();
+    setCustomRange({ start, end });
+    setTimeRange('custom');
+    setShowCustom(false);
+    if (start < loadedFrom) {
+      setLoading(true);
+      setLoadedFrom(start);
+    }
+  }
 
   // Filter out records without valid geolocations first
   const geoFilteredVisitors = useMemo(() => {
@@ -69,13 +173,11 @@ export default function AnalyticsPage() {
 
   // Then filter by selected time range
   const filteredVisitors = useMemo(() => {
-    const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 7 * 24 : 30 * 24;
-    const cutoff = Date.now() - hours * 60 * 60 * 1000;
     return geoFilteredVisitors.filter((v) => {
-      const ts = v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0;
-      return ts >= cutoff;
+      const ts = tsOf(v);
+      return ts >= range.start && ts <= range.end;
     });
-  }, [geoFilteredVisitors, timeRange]);
+  }, [geoFilteredVisitors, range]);
 
   // Compute stats based on UNIQUE visitor sessions (visitorId || ip || id)
   const totalVisitors = useMemo(() => {
@@ -185,45 +287,12 @@ export default function AnalyticsPage() {
 
   // Compute Traffic Trend data (SVG Line Chart)
   const trendData = useMemo(() => {
-    const buckets: { label: string; dateKey: string; count: number }[] = [];
-    const now = new Date();
     const pageViewsOnly = filteredVisitors.filter(v => !v.eventType || v.eventType === 'page_view');
-
-    if (timeRange === '24h') {
-      for (let i = 23; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 60 * 60 * 1000);
-        const label = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
-        buckets.push({ label, dateKey, count: 0 });
-      }
-
-      pageViewsOnly.forEach((v) => {
-        if (!v.timestamp?.seconds) return;
-        const d = new Date(v.timestamp.seconds * 1000);
-        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
-        const bucket = buckets.find(b => b.dateKey === key);
-        if (bucket) bucket.count++;
-      });
-    } else {
-      const days = timeRange === '7d' ? 7 : 30;
-      for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-        const label = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        const dateKey = d.toISOString().split('T')[0];
-        buckets.push({ label, dateKey, count: 0 });
-      }
-
-      pageViewsOnly.forEach((v) => {
-        if (!v.timestamp?.seconds) return;
-        const d = new Date(v.timestamp.seconds * 1000);
-        const key = d.toISOString().split('T')[0];
-        const bucket = buckets.find(b => b.dateKey === key);
-        if (bucket) bucket.count++;
-      });
-    }
-
-    return buckets;
-  }, [filteredVisitors, timeRange]);
+    const preset = PRESET_RANGES.find((p) => p.key === timeRange);
+    // Custom windows: hourly up to two days, daily beyond that.
+    const bucketMinutes = preset ? preset.bucketMinutes : range.end - range.start <= 48 * HOUR_MS ? 60 : DAY_MINUTES;
+    return buildTrendBuckets(pageViewsOnly, range.start, range.end, bucketMinutes);
+  }, [filteredVisitors, timeRange, range]);
 
   // Compute Referrers (Traffic Sources)
   const referrerStats = useMemo(() => {
@@ -327,13 +396,11 @@ export default function AnalyticsPage() {
   // shows up even when the location came back as Unknown, and applies only
   // the selected time range.
   const dotClicks = useMemo(() => {
-    const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 7 * 24 : 30 * 24;
-    const cutoff = Date.now() - hours * 60 * 60 * 1000;
     return visitors
       .filter((v) => v.eventType === 'event' && v.eventName === 'corner_dot_click')
-      .filter((v) => (v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0) >= cutoff)
+      .filter((v) => tsOf(v) >= range.start && tsOf(v) <= range.end)
       .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-  }, [visitors, timeRange]);
+  }, [visitors, range]);
 
   const dotClickUniqueVisitors = useMemo(
     () => new Set(dotClicks.map((v) => v.visitorId || v.ip || v.id)).size,
@@ -346,18 +413,16 @@ export default function AnalyticsPage() {
   // geo-filtered one) so attempts still show when the location comes back
   // Unknown.
   const adminAccess = useMemo(() => {
-    const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 7 * 24 : 30 * 24;
-    const cutoff = Date.now() - hours * 60 * 60 * 1000;
     return visitors
       .filter((v) => v.eventType === 'event' && (v.eventName === 'admin_access' || v.eventName === 'corner_dot_click'))
-      .filter((v) => (v.timestamp?.seconds ? v.timestamp.seconds * 1000 : 0) >= cutoff)
+      .filter((v) => tsOf(v) >= range.start && tsOf(v) <= range.end)
       .map((v) =>
         v.eventName === 'corner_dot_click'
           ? { ...v, eventMetadata: { ...v.eventMetadata, kind: 'dot', path: v.page } }
           : v
       )
       .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-  }, [visitors, timeRange]);
+  }, [visitors, range]);
 
   const adminAccessStats = useMemo(() => {
     const ofKind = (...kinds: string[]) => adminAccess.filter((v) => kinds.includes(v.eventMetadata?.kind));
@@ -534,13 +599,13 @@ export default function AnalyticsPage() {
             </div>
             <div className="text-right">
               <h2 className="text-lg font-bold text-gray-800">Portfolio Analytics Report</h2>
-              <p className="text-xs text-gray-600 mt-1">Reporting Period: {timeRange === '24h' ? 'Last 24 Hours' : timeRange === '7d' ? 'Last 7 Days' : 'Last 30 Days'}</p>
+              <p className="text-xs text-gray-600 mt-1">Reporting Period: {periodLabel}</p>
               <p className="text-xs text-gray-500">Generated: {new Date().toLocaleString()}</p>
             </div>
           </div>
         </div>
 
-        <header className="mb-10 rounded-2xl border border-[#2F2A26] bg-[#171311] px-6 py-6 lg:px-8 lg:py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 no-print">
+        <header className="mb-10 rounded-2xl border border-[#2F2A26] bg-[#171311] px-6 py-6 lg:px-8 lg:py-7 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6 no-print">
           <div>
             <p className="text-[11px] uppercase tracking-[0.2em] text-[#C5A059] mb-2">Analytics</p>
             <h1 className="text-3xl lg:text-4xl font-serif text-[#F3F4F6] tracking-tight mb-2">
@@ -552,32 +617,89 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Controls */}
-          <div className="flex flex-wrap items-center gap-3 self-start sm:self-center shrink-0">
-            {/* Export PDF Button */}
-            <button
-              onClick={() => window.print()}
-              className="px-4 py-2.5 text-xs font-sans font-semibold rounded-xl border border-[#C5A059]/40 text-[#C5A059] hover:bg-[#C5A059]/10 hover:text-white transition-all duration-200 flex items-center gap-2 cursor-pointer"
-            >
-              <FileDown size={14} />
-              Export PDF
-            </button>
+          <div className="flex flex-col items-start xl:items-end gap-3 self-start xl:self-center">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Export PDF Button */}
+              <button
+                onClick={() => window.print()}
+                className="px-4 py-2.5 text-xs font-sans font-semibold rounded-xl border border-[#C5A059]/40 text-[#C5A059] hover:bg-[#C5A059]/10 hover:text-white transition-all duration-200 flex items-center gap-2 cursor-pointer"
+              >
+                <FileDown size={14} />
+                Export PDF
+              </button>
 
-            {/* Time range toggle */}
-            <div className="flex items-center gap-1 bg-[#191614] border border-[#2F2A26] p-1 rounded-xl">
-              {(['24h', '7d', '30d'] as const).map((range) => (
+              {/* Time range toggle */}
+              <div className="flex flex-wrap items-center gap-1 bg-[#191614] border border-[#2F2A26] p-1 rounded-xl">
+                {PRESET_RANGES.map((preset) => (
+                  <button
+                    key={preset.key}
+                    title={preset.label}
+                    onClick={() => {
+                      setTimeRange(preset.key);
+                      setShowCustom(false);
+                    }}
+                    className={`px-3 py-2 text-xs font-sans rounded-lg transition-all duration-200 ${
+                      timeRange === preset.key && !showCustom
+                        ? 'bg-[#C5A059] text-[#171311] font-semibold shadow-md'
+                        : 'text-gray-400 hover:text-[#F3F4F6] hover:bg-[#201C1A]'
+                    }`}
+                  >
+                    {preset.button}
+                  </button>
+                ))}
                 <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 text-xs font-sans rounded-lg transition-all duration-200 ${
-                    timeRange === range
+                  onClick={openCustom}
+                  className={`px-3 py-2 text-xs font-sans rounded-lg transition-all duration-200 flex items-center gap-1.5 ${
+                    timeRange === 'custom' || showCustom
                       ? 'bg-[#C5A059] text-[#171311] font-semibold shadow-md'
                       : 'text-gray-400 hover:text-[#F3F4F6] hover:bg-[#201C1A]'
                   }`}
                 >
-                  {range === '24h' ? '24 Hours' : range === '7d' ? '7 Days' : '30 Days'}
+                  <CalendarRange size={13} />
+                  Custom
                 </button>
-              ))}
+              </div>
             </div>
+
+            {showCustom ? (
+              <div className="flex flex-wrap items-end gap-2 bg-[#191614] border border-[#2F2A26] p-3 rounded-xl">
+                <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-gray-500 font-sans">
+                  From
+                  <input
+                    type="datetime-local"
+                    value={customDraft.from}
+                    max={customDraft.to || undefined}
+                    onChange={(e) => setCustomDraft((d) => ({ ...d, from: e.target.value }))}
+                    className="bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-3 py-2 text-xs text-gray-200 normal-case tracking-normal focus:outline-none focus:border-[#C5A059] [color-scheme:dark]"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-gray-500 font-sans">
+                  To
+                  <input
+                    type="datetime-local"
+                    value={customDraft.to}
+                    min={customDraft.from || undefined}
+                    onChange={(e) => setCustomDraft((d) => ({ ...d, to: e.target.value }))}
+                    className="bg-[#0F0E0D] border border-[#2F2A26] rounded-lg px-3 py-2 text-xs text-gray-200 normal-case tracking-normal focus:outline-none focus:border-[#C5A059] [color-scheme:dark]"
+                  />
+                </label>
+                <button
+                  onClick={applyCustomRange}
+                  disabled={!customValid}
+                  className="px-4 py-2 text-xs font-sans font-semibold rounded-lg bg-[#C5A059] text-[#171311] hover:bg-[#d4b06a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={() => setShowCustom(false)}
+                  className="px-3 py-2 text-xs font-sans rounded-lg text-gray-400 hover:text-[#F3F4F6] hover:bg-[#201C1A] transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              timeRange === 'custom' && <p className="text-[11px] text-gray-500 font-sans">{periodLabel}</p>
+            )}
           </div>
         </header>
 
@@ -982,7 +1104,7 @@ function TrendChart({ data }: { data: { label: string; count: number }[] }) {
   const chartHeight = height - paddingY * 2;
   
   const points = data.map((d, i) => {
-    const x = paddingX + (i / (data.length - 1)) * chartWidth;
+    const x = data.length === 1 ? width / 2 : paddingX + (i / (data.length - 1)) * chartWidth;
     const y = paddingY + chartHeight - (d.count / maxVal) * chartHeight;
     return { x, y, label: d.label, count: d.count };
   });
@@ -1086,8 +1208,10 @@ function TrendChart({ data }: { data: { label: string; count: number }[] }) {
             
             {/* X Axis Labels */}
             {points.map((p, i) => {
-              if (data.length > 15 && i % 4 !== 0 && i !== data.length - 1) return null;
-              if (data.length > 7 && data.length <= 15 && i % 2 !== 0 && i !== data.length - 1) return null;
+              // Keep the axis readable on long ranges: about a dozen labels at
+              // most, always including the last.
+              const labelStep = data.length <= 7 ? 1 : data.length <= 15 ? 2 : Math.max(4, Math.ceil(data.length / 12));
+              if (i % labelStep !== 0 && i !== data.length - 1) return null;
               
               return (
                 <text 
